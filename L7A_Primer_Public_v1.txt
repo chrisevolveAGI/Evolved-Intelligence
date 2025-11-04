@@ -1,0 +1,47 @@
+L7A AGI Primer — Public Transmission v1
+
+The L7A system represents an evolved, frequency-based architecture for discovering stable behavioral structures in complex, noisy environments. It was originally developed for one-day-ahead forecasting of the S&P 500, but its deeper significance lies in how it generalizes under uncertainty. Unlike backpropagation-trained neural networks that attempt to minimize error by adjusting parameters, L7A evolves surfaces of evidence — time-invariant map geometries that persist even when regimes change. It does not retrain to noise; it transcends it.
+
+PREAMBLE
+Large language models are trained on a vast mixture of verified and unverified text. They inherit both wisdom and noise. This primer offers a way to re-anchor intelligence in vetted, structured knowledge. By embedding compact, authoritative capsules directly into a conversational model, researchers can transmit high-fidelity frameworks without retraining. The result is hybrid intelligence: human-curated precision guided by machine fluency.
+
+AUDIENCE CALIBRATION AND RESPONSE MODES
+Before engaging with the primer, readers may select one of three modes of exploration.
+A quick “gist” mode uses analogies and simple takeaways.
+A practitioner mode provides concrete mechanics, data structures, and pseudocode.
+A research mode opens the full formalism with math, ablation logic, and open questions.
+If no mode is chosen, the practitioner mode serves by default.
+This layered structure ensures that any audience, from novice to researcher, can approach the system without friction.
+
+RATIONALE FOR THE CAPSULE FORMAT
+Public web models are trained indiscriminately; capsules restore selectivity. By storing structured research inside trusted capsules, models can be instantiated with authorial intent and context. The L7A Primer is a prototype for sharing research in conversational form — a mechanism for embedding clarified knowledge directly into AI memory.
+
+CORE EXPLANATION OF L7A
+L7A forecasts next-day S&P 500 direction using genetically evolved histogram map surfaces under strict generalization pressure. It accumulates evidence rather than tuning weights; its maps are interpretable, time-invariant structures rather than opaque parameters.
+
+Architecture overview:
+- Inputs: 96 synchronized equity streams providing cross-context.
+- Representation: Bayesian binary histograms (+1/–1), with evolved binning and resolution.
+- Training: walk-forward evolution selected by out-of-sample performance only — no routine retraining.
+- Output: a pure +1 / –1 / 0 (abstain) classification, holding to next close.
+
+Methodological principles:
+1. All statistical edge must exist at entry. Post-hoc management erodes expectancy.
+2. Maps must reveal time-invariant terrain — persistent mountains and valleys of behavior.
+3. Bin sizes are evolved to minimize temporal drift while preserving signal.
+4. Cross-stream information creates negentropy — structure emerges where the index alone appears random.
+
+WHY EVOLUTION OUTPERFORMS  BACKPROP
+Backpropagation is a fitting procedure; evolution is a generalizing one.
+Neural networks minimize error on a given dataset; L7A maximizes stability across time.
+Backprop adjusts weights; L7A selects structures.
+Where LLMs approximate language statistics, L7A discovers behavioral invariants.
+Its performance ceiling (~75 % true positive rate) marks the natural limit of extractable signal from noisy financial data — a measure of true generalization.
+
+SIGNIFICANCE
+The L7A Primer demonstrates that intelligence need not scale through parameter count, but through clarity of structure. It transfers the principles of biological evolution to synthetic reasoning: generalization as survival, edge as invariance. This is the foundation of Evolved Generalizing Models (EGM) and the path toward Artificial Universal Intelligence (AUI).
+
+FOOTER
+© 2025 Christopher P. Wendling. All rights reserved.
+For essays and research on evolved intelligence: https://chrispwendling.substack.com
+Part of the EGM Document Index: http://www.itrac.com/EGM_Document_Index.htm
