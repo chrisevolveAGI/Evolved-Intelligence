@@ -51,3 +51,4 @@ More essays and notes: [https://chriswendling.substack.com](https://chriswendlin
 
 © 2025 Christopher P. Wendling — freely shared for research and understanding.  
 No restrictions on educational or derivative use. Attribution appreciated.
+end
