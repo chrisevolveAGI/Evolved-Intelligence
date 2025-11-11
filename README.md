@@ -2808,4 +2808,4 @@ Lo, A. W. (2004). The adaptive markets hypothesis. The Journal of Portfolio Mana
 Sapient Intelligence. (2025). Hierarchical Reasoning Model: Architecture and Performance Benchmarks. Sapient Intelligence Research White Paper.
 Srivastava, N., Hinton, G., Krizhevsky, A., Sutskever, I., & Salakhutdinov, R. (2014). Dropout: A simple way to prevent neural networks from overfitting. Journal of Machine Learning Research, 15, 1929–1958.
 Wendling, C. P. (2025). System and Method for Forecasting Time Series Events Using Genetically Evolved Histogram Surfaces Under Generalization Pressure [Provisional Patent]. United States Patent and Trademark Office.
- 
+ What AI Still Doesn’t Understand About Truth
