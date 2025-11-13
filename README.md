@@ -2809,3 +2809,13669 @@ Sapient Intelligence. (2025). Hierarchical Reasoning Model: Architecture and Per
 Srivastava, N., Hinton, G., Krizhevsky, A., Sutskever, I., & Salakhutdinov, R. (2014). Dropout: A simple way to prevent neural networks from overfitting. Journal of Machine Learning Research, 15, 1929–1958.
 Wendling, C. P. (2025). System and Method for Forecasting Time Series Events Using Genetically Evolved Histogram Surfaces Under Generalization Pressure [Provisional Patent]. United States Patent and Trademark Office.
  What AI Still Doesn’t Understand About Truth
+
+	 /* ******************************************** */
+         /*                 BAYES96X.C                   */
+	 /*                   1.21GW                     */
+	 /*                 HIREZ VER                    */
+	 /*               FOR:  WATCOM 10.0              */
+         /*          last edit  Feb 5, 2021              */
+	 /*            Written by C.P.Wendling           */
+	 /* ******************************************** */
+
+//  Limited to one pass, no stops or reentries on 052901
+//  Note: targets that are "hit" are assumed to be taken at the target price.
+//  Added code to support "primary & secondary" .prd's   1/3/94
+//  Note: secondary .prd's are not evolved genetically. 
+//  Added code to output realized&unrealized equity points stream. 1/7/94
+//  Added code to limit number of re-entries 2-16-94
+//  Added code to genetically evolve maps/traders.  2-28-94
+//  N/A Added code to toggle "dynamic targets"-> close positions if .prd flips
+//  Modified to use points, not percent  1-30-95
+//  Modified account stream plot to use constant vert axis scale,
+//  green is train set, magenta is optimize set, yellow is verify set.
+//  Added additional trading variables to evolved parameters.  1/30/95
+//  Modified simulation event order:reenter/stop/hit target/time out. 
+//  Modified to enter at closing price(day that .prd is calculated.) 2/26/95
+//  N/A Added minimum stop threshold 3/3/95
+//  This version uses standard .prn format: o,h,l,c data files.
+//  This version allows continued evolution after reading .pop file.  3-25-95
+//  Modified  to include 4 coordinated price files ala 2-streams. 3/27/95
+//  Modified to use independently evolved future looks for target calculations. 
+//  The fitness function is the Sterling ratio over the optimization data subset
+//  with non-linear penalties for: 1) "over-representation" (to force generaliozation)
+//  and 2) trading infrequency.
+//  N/A This version uses elite-ism in the evolution algorithm.
+//  This version also simulates annealing of the mutation "distance" per generation.
+//  Added code to write/overwrite "autosav.map" every 5 generations.
+//  Changed to: Spread positions allowed ... 10/03/01
+//  Changed to 4 supporting mkts, with to-be-forecasted mkt NOT on map. 03-22-02
+
+#include <stdio.h>
+#include <dos.h>
+#include <math.h>
+#include <graph.h>
+#include <stdlib.h>
+
+static union REGS xr,yr;
+unsigned int xcurs,ycurs;
+
+#define                 EVER             ;;
+#define                 MAXLINES         6000
+#define                 MAGENTA          5
+#define                 RED              4
+#define                 GREEN            2
+#define                 BLUE             1
+#define                 CYAN             3
+#define                 BROWN            6
+#define                 DARKGRAY         8
+#define                 LIGHTGRAY        7
+#define                 LIGHTBLUE        9
+#define                 LIGHTGREEN       10
+#define                 LIGHTCYAN        11
+#define                 LIGHTRED         12
+#define                 LIGHTMAGENTA     13
+#define                 YELLOW           14
+#define                 WHITE            15
+#define                 BLACK            0
+#define                 SCALE            100
+#define                 XSIZE            240
+#define                 YSIZE            800
+#define                 CENTER1          50
+#define                 CENTER2          150
+#define                 CENTER3          250
+#define                 CENTER4          350
+#define                 CENTER5          450
+#define                 CENTER6          550
+#define                 CENTER7          650
+#define                 CENTER8          750
+
+#define                 MAXPOPULATION    100 
+#define                 MAXDIST          7
+#define                 MAXGENES         MAXDIST*16+33
+
+FILE *djiaf; 
+FILE *prd;
+FILE *prd2;
+FILE *f;
+FILE *pr;
+FILE *equ;
+FILE *du;
+
+
+static union REGS xr,yr;
+int ft1; // std dev sampling period-evolved
+int ft2,ft3; // available-evolved
+float gft2;
+float gft3;
+int ft4;   // available
+long f2=5;   //ref offset for traces
+long f3=10;  //    "
+long f4=15;  //    "
+long ocount;
+float map[XSIZE][YSIZE];
+float map2[XSIZE][YSIZE];
+float map3[XSIZE][YSIZE];
+float tempmap[XSIZE][YSIZE];
+int grtoggle=-1; //graphics toggle is off, 1 =on
+int fittype=1; // 1=sterling, 2=returns/rms dd's, 3 = returns/variance
+int targtype=1;    
+int tradertype=3;  // 1 = long, 2 = short, 3 = both
+int entrytypeflag=1;  // 1=enter on close,0=enter on next days open
+int maxdeadrun;
+int datatype;  // 1= ohlc   0= close
+int virg=250;
+float mutrate=.01;
+int gcmaxpass=1;    // maximum map training passes
+int maxpass;        // number of training passes for map
+int gflook=10;     // for upper and lower performance bands
+float mltq=1.0;    // user specified minimum lots to qualify;
+long offspring[MAXGENES];
+long parent[MAXPOPULATION][MAXGENES];
+long bestoos[1][MAXGENES];
+int mutperiod=1; // number of generations between mutations
+						// mutation magnitude is annealed by generation number
+float worstfit;
+int worstss;
+int best_ss;
+float bestfit;
+float worstoosfit;
+float bestoosfit;
+
+float fitness[MAXPOPULATION+1];
+float oosfitness[MAXPOPULATION+1];
+int seed;
+int competitor_ss=0;
+float utile,ltile;
+float bsad=-1000.0;   // Best fitness over All Data
+int evoptdays=1;
+float clippedvar;
+float ipc=0.0;
+float matpc=0.0;
+float opc=0.0;
+float fitness_offspring;
+float oosfitness_offspring;
+float fitness_competitor;
+int competitor_ss;
+float avegenfit[501];
+float avelyeq[1500];   // average equity array over virgin data for generation
+float favelyeq[1500];
+float thisciteq[1500];  // last citizen used equity stream on virgin data
+float trace[250];
+float trace2[250];
+float trace3[250];
+float trace4[250];
+float aapw;
+float weightcount;
+float maxweights;
+int startgen;
+int ss;   // "social security" number used to track populations
+long besteverchrom[1][MAXGENES];
+float lrate=.004;
+float lrate2=.004;
+float lrate3=.004;
+float lrate4=.004;
+int tracelength=100;
+int tracelength2=100;
+int tracelength3=100;
+int tracelength4=100;
+int mapscale[MAXDIST*8+1];
+float dayweight[XSIZE+1];  // range 0 to 1.0
+int gcmaxsamples;
+int gcmaxhist;
+int maaapg;     // minimum acceptable average annual points gain, user spec'd
+float gcfsf;    // global constant forecast scale factor
+float dr;       // determined ratio (# active map weights/#training pairs)
+float gcstopthresh;
+float minstopthresh;
+float gcrthresh;
+int gclotspertrade;
+int gcmaxlots;
+int gcmaxreentry;
+float puritythresh;
+int gcmapscale;
+float bestalltime=0.0;
+char pricestream[30];
+char prdstream[30];
+char prdstream2[30];
+int oflag;                  // optimization code running=1, else=0
+int startss;
+int nod;                    // number of data days in djia file 
+int flook=10;
+int hs=0;
+float sumnew=0.0;
+float sumnewcells[MAXLINES];
+float sumret[MAXLINES];
+float vixc[MAXLINES];        // vix array
+float c[MAXLINES];          // closing price array 
+float c2[MAXLINES];         // coordinated price stream #1
+float c3[MAXLINES];         // coordinated price stream #2
+float c4[MAXLINES];         // coordinated price stream #3
+float c5[MAXLINES];         // coordinated price stream #4
+float c6[MAXLINES];         // coordinated price stream #5
+float c7[MAXLINES];         // coordinated price stream #6
+float c8[MAXLINES];         // coordinated price stream #7
+float c9[MAXLINES];         // coordinated price stream #8
+float c10[MAXLINES];         // coordinated price stream #9
+float c11[MAXLINES];         // coordinated price stream #10
+float c12[MAXLINES];         // coordinated price stream #11
+float c13[MAXLINES];         // coordinated price stream #12
+float c14[MAXLINES];         // coordinated price stream #13
+float c15[MAXLINES];         // coordinated price stream #14
+float c16[MAXLINES];         // coordinated price stream #15
+float c17[MAXLINES];         // coordinated price stream #16
+float c18[MAXLINES];           
+float c19[MAXLINES];         
+float c20[MAXLINES];         
+float c21[MAXLINES];         
+float c22[MAXLINES];         
+float c23[MAXLINES];         // coordinated price stream 
+float c24[MAXLINES];         // coordinated price stream 
+float c25[MAXLINES];         // coordinated price stream 
+float c26[MAXLINES];         // coordinated price stream 
+float c27[MAXLINES];         // coordinated price stream 
+float c28[MAXLINES];         // coordinated price stream 
+float c29[MAXLINES];         // coordinated price stream 
+float c30[MAXLINES];         // coordinated price stream 
+float c31[MAXLINES];         // coordinated price stream 
+float c32[MAXLINES];         // coordinated price stream 
+float c33[MAXLINES];         // coordinated price stream
+
+float c34[MAXLINES];           
+float c35[MAXLINES];         
+float c36[MAXLINES];         
+float c37[MAXLINES];         
+float c38[MAXLINES];         
+float c39[MAXLINES];           
+float c40[MAXLINES];         
+float c41[MAXLINES];         
+float c42[MAXLINES];         
+float c43[MAXLINES];         
+float c44[MAXLINES];           
+float c45[MAXLINES];         
+float c46[MAXLINES];         
+float c47[MAXLINES];         
+float c48[MAXLINES];         
+float c49[MAXLINES];           
+
+float c50[MAXLINES];           
+float c51[MAXLINES];         
+float c52[MAXLINES];         
+float c53[MAXLINES];         
+float c54[MAXLINES];         
+float c55[MAXLINES];           
+float c56[MAXLINES];         
+float c57[MAXLINES];         
+float c58[MAXLINES];         
+float c59[MAXLINES];         
+float c60[MAXLINES];           
+float c61[MAXLINES];         
+
+float c62[MAXLINES];           
+float c63[MAXLINES];         
+float c64[MAXLINES];         
+float c65[MAXLINES];         
+float c66[MAXLINES];         
+float c67[MAXLINES];           
+float c68[MAXLINES];         
+float c69[MAXLINES];         
+float c70[MAXLINES];         
+float c71[MAXLINES];         
+float c72[MAXLINES];           
+float c73[MAXLINES];         
+
+float c74[MAXLINES];           
+float c75[MAXLINES];         
+float c76[MAXLINES];         
+float c77[MAXLINES];         
+float c78[MAXLINES];         
+float c79[MAXLINES];           
+float c80[MAXLINES];         
+float c81[MAXLINES];         
+float c82[MAXLINES];         
+float c83[MAXLINES];         
+float c84[MAXLINES];           
+float c85[MAXLINES];         
+
+float c86[MAXLINES];           
+float c87[MAXLINES];         
+float c88[MAXLINES];         
+float c89[MAXLINES];         
+float c90[MAXLINES];         
+float c91[MAXLINES];           
+float c92[MAXLINES];         
+float c93[MAXLINES];         
+float c94[MAXLINES];         
+float c95[MAXLINES];         
+float c96[MAXLINES];           
+float c97[MAXLINES];         
+
+
+
+float xprd[50][MAXLINES];
+float o[MAXLINES];          // open price array
+float h[MAXLINES];          // high price array
+float l[MAXLINES];          // low price array
+float pred[MAXLINES];       // prediction stream 
+float predraw[MAXLINES];    // raw proportion stream
+float pred2[MAXLINES];
+int predtype[MAXLINES];
+float lotresult[80000];
+float monthlygain[MAXLINES];
+int openmarker[MAXLINES];
+int closemarker[MAXLINES];
+int stopmarker[MAXLINES];
+int reentermarker[MAXLINES];
+float account[MAXLINES];
+float randu[MAXLINES];  // realized and unrealized revenue stream array
+float marketpts[MAXLINES];
+float htscale=2.0;
+float longthresh=.00750;  // primary
+float longthresh2=.00750;  //secondary
+int gcmaxhold=30;  // max trading days long position can be held open
+int gcsmaxhold=30;  // max trading days short position can be held open
+float shortthresh=-.00750;
+float shortthresh2=-.00750;
+float stopthresh=4.0;    // 4.0 S&P points
+float rthresh=1.0;     // reenter;  1.0 S&P points
+long lotcount;
+int simstart,simstop;
+float fsf=1.0;      // forecast scale factor
+int lotopenref[150]; //ref day lot opened
+int tradetype[150];   // 1=primary long,2=secondary long,-1=prim short,-2=sec short
+int lotstatus[150]; // 1=active,0=available,2=stopped long,3=stopped short
+int lotrcount[150]; // lot re-entry count
+float lottarget[150]; // forecasted scaled target price
+float lotentryprice[150];
+float lotexitprice[150];
+float maxcloseprice[150];
+float mincloseprice[150];
+int maxlots=10;
+int color;
+int d;       // audit flag  0=off, 1=on
+int eq=0;    // equity stream output flag
+int lotspertrade=3;
+int maxhold=10;
+int smaxhold=10;
+int mddref=0;     //beginning of max draw down ref day #
+int mdd20,max20,mdd20a;
+int mdd60,max60,mdd60a;
+int mdd120,max120,mdd120a;
+int mdd250,max250,mdd250a;
+int lymdd20,lymdd60,lymdd120,lymdd250;
+float slippage=0.0;       //  .05 big points=$62.50 per contract,currency,round turn
+float sharperatio;
+int trailing=0;
+int nospreadflag=0;
+int maxreentry=3;
+float best=0.0;
+long accountscale=5000;   // max points on y axis for account plot
+int dynamicflag=0;
+int wincount,losscount;
+float winsum,losssum;
+	long kount=0;   // total lots traded over simulation
+	int numlotsactive=0;  // number of open positions at any time
+	int numhittarget=0;
+	int numexpprofit=0;
+	int numexploss=0;
+	int numstopsexp=0;
+	int numstopped=0;
+	int numreentered=0;
+	int numlotsnostop=0;
+	float openlotvalue;
+	float cab=0.0;   // cash account balance
+	float sumdaysold=0.0;
+	int lotnum;
+	int longflag,shortflag;
+	int mcount=0;   // month count
+	float oldaccount;
+	float summonthlygain=0.0;
+	float avemonthlygain;
+	float ave;
+	float chg;              // points change of offset lots
+	double sumdiffsqrd=0.0;
+	double stddev;
+	float sum;
+char istream1[40];
+char istream2[40];
+char istream3[40];
+char istream4[40];
+char istream5[40];
+char istream6[40];
+char istream7[40];
+char istream8[40];
+char istream9[40];
+char istream21[40];
+char istream22[40];
+char istream23[40];
+char istream24[40];
+char istream25[40];
+char istream26[40];
+char istream27[40];
+char istream28[40];
+char istream29[40];
+char istream30[40];
+char istream31[40];
+char istream32[40];
+char istream33[40];
+char istream34[40];
+char istream35[40];
+char istream36[40];
+char istream37[40];
+char istream38[40];
+char istream39[40];
+char istream40[40];
+char istream41[40];
+char istream42[40];
+char istream43[40];
+char istream44[40];
+
+char istream45[40];
+char istream46[40];
+char istream47[40];
+char istream48[40];
+char istream49[40];
+char istream50[40];
+char istream51[40];
+char istream52[40];
+char istream53[40];
+char istream54[40];
+char istream55[40];
+char istream56[40];
+char istream57[40];
+char istream58[40];
+char istream59[40];
+char istream60[40];
+
+
+char istream61[40];
+char istream62[40];
+char istream63[40];
+char istream64[40];
+char istream65[40];
+char istream66[40];
+char istream67[40];
+char istream68[40];
+char istream69[40];
+char istream70[40];
+char istream71[40];
+char istream72[40];
+char istream73[40];
+char istream74[40];
+char istream75[40];
+char istream76[40];
+char istream77[40];
+char istream78[40];
+char istream79[40];
+char istream80[40];
+char istream81[40];
+char istream82[40];
+char istream83[40];
+char istream84[40];
+char istream85[40];
+char istream86[40];
+char istream87[40];
+char istream88[40];
+char istream89[40];
+char istream90[40];
+char istream91[40];
+char istream92[40];
+char istream93[40];
+char istream94[40];
+char istream95[40];
+char istream96[40];
+char istream97[40];
+char istream98[40];
+char istream99[40];
+char istream100[40];
+char istream101[40];
+char istream102[40];
+char istream103[40];
+char istream104[40];
+char istream105[40];
+char istream106[40];
+char istream107[40];
+char istream108[40];
+
+
+
+
+
+char istream11[40];  // output .lot stream for auto production
+char istream12[40];  // output .prd stream filename
+char imap[40];
+char itask[40];
+char mappath[80];
+int mapnamecount=0;  // incremental integer map name
+char opop[30];   // output .pop file name for batch mode
+char parms[30];
+char ostream[30];
+int manualmode=0;    // =1 if manual, 0 if command line
+int initflag=0;
+int bmf=0; // batch mode flag, 0 if not batchmode, 1 if batchmode
+int cbmf=0; // continue batch mode flag
+long maxocount=30000;
+int hide=0; // number of hidden n days from system and from view
+int hidetoggle=1;  // -1=invisible +1=visible
+int dumptoggle=0;   // 1 to dump *.lot, 2 to dump .prd files
+int mutatedflag;
+int numsupportmarkets;
+
+float variance;
+float oosvariance;
+float virgvariance;
+int stepflag;
+int donestep;
+int maptype; // 1 = sum into cells, 2 = ave into cells
+
+float proportion_contained;
+float rss=1.0;  // return stream scale -viewing graphics
+float grss=1.0; // global return stream scale
+float virgfitness;
+float vf[30001];
+float oosf[30001];
+float frontoos[30001];
+float moos[30001];
+float moos2[30001];
+float scatterscale=1.0;
+int learn;  // number of days used to learn map frequency ditributions
+int foldshift; // number of days to shift opt period to the left in 10-fold
+int moosb=1400; // monitor oos beginning
+int moose=1550; // monitor oos end
+int moosb2=2900; // monitor oos beginning
+int moose2=3050; // monitor oos end
+int fold;
+int foldwidth;
+float optreturns2;
+float virgreturns2;
+float agefactor=1.0;
+float mapspread[210];
+float wla,wlb,wlc,wld;
+int trainflook;
+float trailstdevc2=1.0;
+float trailstdevc3=1.0;
+float trailstdevc4=1.0;
+float trailstdevc5=1.0;
+float trailstdevc6=1.0;
+float trailstdevc7=1.0;
+float trailstdevc8=1.0;
+float trailstdevc9=1.0;
+float globalsum,globalcount;
+float globalchg;
+float fn[30];
+int ttp=0;  // total traces presented to map
+int twtp=0;  // total WINNING traces presented to map
+int tltp=0;  // total LOSING traces presented
+/***********************************************************************/
+
+main(argc,argv)
+	int argc;
+	char *argv[];
+	  {
+          int ref,x;
+          for(x=1;x<209;x++)
+                {
+                mapspread[x]=1.0/sqrt((float)x);
+                }
+          if(argc != 2 && argc != 3 && argc != 4 && argc != 6 && argc != 7)   // to run in manual mode
+			{
+			manualmode=1;
+			for(;;)
+				menu();
+			}
+		if(argc == 2)   // to automatically build maps
+			{
+			strcpy(parms,argv[1]);
+			bmf=1;
+			rd_parms(); // read control parameter file
+			srand(seed);
+			rd_prices(); //read to be forecasted stream
+                    //    printf("reading prices...\n");
+                        delay(5000);
+			for(EVER)
+				setup();
+			}
+		if(argc == 3)  // to automatically output single .lot stream
+			{
+			strcpy(imap,argv[1]);     // input map filename
+			strcpy(istream11,argv[2]); // output .lot filename
+                        dumptoggle=1;   // to dump *.lot files to disk
+			initflag=1;
+			read_map();
+			for(ref=250;ref<=nod;ref++)
+				 c_perfn(ref);
+			normalize();
+			simstrat();
+			exit(1);
+			}
+	  if(argc == 4)  // to automatically output multiple .lot stream
+			{
+			strcpy(itask,argv[1]);     // input task filename
+                        dumptoggle=1;  // to dump *.lot files to disk
+			run_task();
+			exit(1);
+			}
+          if(argc == 6)  // to automatically output single .prd stream
+			{
+			strcpy(imap,argv[1]);     // input map filename
+                        strcpy(istream12,argv[2]); // output .prd filename
+			initflag=1;
+			read_map();
+			for(ref=250;ref<=nod;ref++)
+				 c_perfn(ref);
+			normalize();
+                        du=fopen(istream12,"w");
+                        for(ref=500;ref<=nod;ref++)
+                                {
+                             //   printf("%f\n",pred[ref]);
+                                fprintf(du,"%f\n",pred[ref]);
+                                }
+                        fclose(du);
+			exit(1);
+			}
+          if(argc == 7)  // to automatically output multiple .prd streams
+			{
+			strcpy(itask,argv[1]);     // input task filename
+                        dumptoggle=2;  // to dump .prd files to disk
+			run_task();
+			exit(1);
+                        }
+
+	  }
+
+
+
+normalize()
+	{
+	int ref,x;
+	float xbar,sum,count,sumdiffsqrd,stdev,ave;
+	sum=0.0;
+	count=0.0;
+	sumdiffsqrd=0.0;
+	for(ref=250;ref<=nod;ref++)
+		{
+                predtype[ref]=1;
+                if(predtype[ref]==1)
+                        {
+                        sum+=predraw[ref];
+                        count=count+1.0;
+                        }
+		}
+	ave=sum/count;
+        for(ref=250;ref<=nod;ref++)
+		{
+                if(predtype[ref]==1)
+                        {
+                        pred[ref]=predraw[ref]-ave;
+                        }
+		}
+	sum=0.0;
+	count=0.0;
+        for(ref=simstart;ref<=nod;ref++)
+		{
+                if(predtype[ref]==1)
+                        {
+                        sum+=pred[ref];
+                        count+=1.0;
+                        }
+		}
+	xbar=sum/count;
+        for(ref=simstart;ref<=nod;ref++)
+		{
+                if(predtype[ref]==1)
+                        {
+                        sumdiffsqrd+=(xbar-pred[ref])*(xbar-pred[ref]);
+                        }
+		}
+	stdev=sqrt(sumdiffsqrd/count);
+	for(ref=0;ref<=nod;ref++)
+		{
+                if(predtype[ref]==1)
+                        {
+                        pred[ref]/=stdev;
+                        }
+		}
+	sum=0.0;
+	count=0.0;
+	sumdiffsqrd=0.0;
+	for(ref=250;ref<=nod;ref++)
+		{
+                if(predtype[ref]==2)
+                        {
+                        sum+=predraw[ref];
+                        count=count+1.0;
+                        }
+		}
+	ave=sum/count;
+        for(ref=250;ref<=nod;ref++)
+		{
+                if(predtype[ref]==2)
+                        {
+                        pred[ref]=predraw[ref]-ave;
+                        }
+		}
+	sum=0.0;
+	count=0.0;
+        for(ref=simstart;ref<=nod;ref++)
+		{
+                if(predtype[ref]==2)
+                        {
+                        sum+=pred[ref];
+                        count+=1.0;
+                        }
+		}
+	xbar=sum/count;
+        for(ref=simstart;ref<=nod;ref++)
+		{
+                if(predtype[ref]==2)
+                        {
+                        sumdiffsqrd+=(xbar-pred[ref])*(xbar-pred[ref]);
+                        }
+		}
+	stdev=sqrt(sumdiffsqrd/count);
+	for(ref=0;ref<=nod;ref++)
+		{
+                if(predtype[ref]==2)
+                        {
+                        pred[ref]/=stdev;
+                        }
+		}
+
+
+	return(1);
+	}
+
+
+
+
+
+
+
+
+
+
+
+
+c_trailstdev(ref)
+        int ref;
+	{
+        int x;
+        float xbar,sum,count,sumdiffsqrd,stdev,chg;
+	sum=0.0;
+	count=0.0;
+	sumdiffsqrd=0.0;
+   /*     for(x=0;x<=ft1;x++)
+		{
+                chg=(c[ref-x]/c[ref-(x+1)]-1.0)*100.0;
+                sum+=chg;
+                count+=1.0;
+		}
+	xbar=sum/count;
+        for(x=0;x<=ft1;x++)
+		{
+                chg=(c[ref-x]/c[ref-(x+1)]-1.0)*100.0;
+                sumdiffsqrd+=(xbar-chg)*(xbar-chg);
+		}
+        trailstdevc2=sqrt(sumdiffsqrd/count);
+        sum=0.0;
+	count=0.0;
+	sumdiffsqrd=0.0;
+        for(x=0;x<=ft1;x++)
+		{
+                chg=(c3[ref-x]/c3[ref-(x+1)]-1.0)*100.0;
+                sum+=chg;
+                count+=1.0;
+		}
+	xbar=sum/count;
+        for(x=0;x<=ft1;x++)
+		{
+                chg=(c3[ref-x]/c3[ref-(x+1)]-1.0)*100.0;
+                sumdiffsqrd+=(xbar-chg)*(xbar-chg);
+		}
+        trailstdevc3=sqrt(sumdiffsqrd/count);
+	sum=0.0;
+	count=0.0;
+	sumdiffsqrd=0.0;
+        for(x=0;x<=ft1;x++)
+		{
+                chg=(c4[ref-x]/c4[ref-(x+1)]-1.0)*100.0;
+                sum+=chg;
+                count+=1.0;
+		}
+	xbar=sum/count;
+        for(x=0;x<=ft1;x++)
+		{
+                chg=(c4[ref-x]/c4[ref-(x+1)]-1.0)*100.0;
+                sumdiffsqrd+=(xbar-chg)*(xbar-chg);
+		}
+        trailstdevc4=sqrt(sumdiffsqrd/count);
+	sum=0.0;
+	count=0.0;
+	sumdiffsqrd=0.0;
+        for(x=0;x<=ft1;x++)
+		{
+                chg=(c5[ref-x]/c5[ref-(x+1)]-1.0)*100.0;
+                sum+=chg;
+                count+=1.0;
+		}
+	xbar=sum/count;
+        for(x=0;x<=ft1;x++)
+		{
+                chg=(c5[ref-x]/c5[ref-(x+1)]-1.0)*100.0;
+                sumdiffsqrd+=(xbar-chg)*(xbar-chg);
+		}
+        trailstdevc5=sqrt(sumdiffsqrd/count);
+	sum=0.0;
+	count=0.0;
+	sumdiffsqrd=0.0;
+        for(x=0;x<=ft1;x++)
+		{
+                chg=(c6[ref-x]/c6[ref-(x+1)]-1.0)*100.0;
+                sum+=chg;
+                count+=1.0;
+		}
+	xbar=sum/count;
+        for(x=0;x<=ft1;x++)
+		{
+                chg=(c6[ref-x]/c6[ref-(x+1)]-1.0)*100.0;
+                sumdiffsqrd+=(xbar-chg)*(xbar-chg);
+		}
+        trailstdevc6=sqrt(sumdiffsqrd/count);
+	sum=0.0;
+	count=0.0;
+	sumdiffsqrd=0.0;
+        for(x=0;x<=ft1;x++)
+		{
+                chg=(c7[ref-x]/c7[ref-(x+1)]-1.0)*100.0;
+                sum+=chg;
+                count+=1.0;
+		}
+	xbar=sum/count;
+        for(x=0;x<=ft1;x++)
+		{
+                chg=(c7[ref-x]/c7[ref-(x+1)]-1.0)*100.0;
+                sumdiffsqrd+=(xbar-chg)*(xbar-chg);
+		}
+        trailstdevc7=sqrt(sumdiffsqrd/count);
+	sum=0.0;
+	count=0.0;
+	sumdiffsqrd=0.0;
+        for(x=0;x<=ft1;x++)
+		{
+                chg=(c8[ref-x]/c8[ref-(x+1)]-1.0)*100.0;
+                sum+=chg;
+                count+=1.0;
+		}
+	xbar=sum/count;
+        for(x=0;x<=ft1;x++)
+		{
+                chg=(c8[ref-x]/c8[ref-(x+1)]-1.0)*100.0;
+                sumdiffsqrd+=(xbar-chg)*(xbar-chg);
+		}
+        trailstdevc8=sqrt(sumdiffsqrd/count);
+	sum=0.0;
+	count=0.0;
+	sumdiffsqrd=0.0;
+        for(x=0;x<=ft1;x++)
+		{
+                chg=(c9[ref-x]/c9[ref-(x+1)]-1.0)*100.0;
+                sum+=chg;
+                count+=1.0;
+		}
+	xbar=sum/count;
+        for(x=0;x<=ft1;x++)
+		{
+                chg=(c9[ref-x]/c9[ref-(x+1)]-1.0)*100.0;
+                sumdiffsqrd+=(xbar-chg)*(xbar-chg);
+		}
+        trailstdevc9=sqrt(sumdiffsqrd/count);
+        */
+	return(1);
+	}
+
+
+
+
+setup()
+	{
+	rd_coorprices1();
+	rd_coorprices2();
+	rd_coorprices3();
+	rd_coorprices4();
+	rd_coorprices5();
+	rd_coorprices6();
+	rd_coorprices7();
+	rd_coorprices8();
+        rd_coorprices9();
+        rd_coorprices10();
+        rd_coorprices11();
+        rd_coorprices12();
+        rd_coorprices13();
+        rd_coorprices14();
+        rd_coorprices15();
+        rd_coorprices16();
+        rd_coorprices17();
+        rd_coorprices18();
+        rd_coorprices19();
+        rd_coorprices20();
+        rd_coorprices21();
+        rd_coorprices22();
+        rd_coorprices23();
+        rd_coorprices24();
+        rd_coorprices25();
+        rd_coorprices26();
+        rd_coorprices27();
+        rd_coorprices28();
+        rd_coorprices29();
+        rd_coorprices30();
+        rd_coorprices31();
+        rd_coorprices32();
+        rd_coorprices33();
+        rd_coorprices34();
+        rd_coorprices35();
+        rd_coorprices36();
+        rd_coorprices37();
+        rd_coorprices38();
+        rd_coorprices39();
+        rd_coorprices40();
+        rd_coorprices41();
+        rd_coorprices42();
+        rd_coorprices43();
+        rd_coorprices44();
+        rd_coorprices45();
+        rd_coorprices46();
+        rd_coorprices47();
+        rd_coorprices48();
+        rd_coorprices49();
+        rd_coorprices50();
+        rd_coorprices51();
+        rd_coorprices52();
+        rd_coorprices53();
+        rd_coorprices54();
+        rd_coorprices55();
+        rd_coorprices56();
+        rd_coorprices57();
+        rd_coorprices58();
+        rd_coorprices59();
+        rd_coorprices60();
+        rd_coorprices61();
+        rd_coorprices62();
+        rd_coorprices63();
+        rd_coorprices64();
+        rd_coorprices65();
+        rd_coorprices66();
+        rd_coorprices67();
+        rd_coorprices68();
+        rd_coorprices69();
+        rd_coorprices70();
+        rd_coorprices71();
+        rd_coorprices72();
+        rd_coorprices73();
+        rd_coorprices74();
+        rd_coorprices75();
+        rd_coorprices76();
+        rd_coorprices77();
+        rd_coorprices78();
+        rd_coorprices79();
+        rd_coorprices80();
+        rd_coorprices81();
+        rd_coorprices82();
+        rd_coorprices83();
+        rd_coorprices84();
+        rd_coorprices85();
+        rd_coorprices86();
+        rd_coorprices87();
+        rd_coorprices88();
+        rd_coorprices89();
+        rd_coorprices90();
+        rd_coorprices91();
+        rd_coorprices92();
+        rd_coorprices93();
+        rd_coorprices94();
+        rd_coorprices95();
+        rd_coorprices96();
+
+	run_batch();
+	return(1);
+	}
+
+
+run_task()
+	{
+	int ref,x;
+	prd2=fopen(itask,"r");
+	if(prd2 == NULL)
+		{
+		printf("Can't open task control file: %s\n",itask);
+		delay(2000);
+		exit(1);
+		}
+	while(fscanf(prd2,"%s %s\n",imap,istream11) != EOF)
+		{
+		printf("Processing %s %s\n",imap,istream11);
+		initflag=1;
+		read_map();
+		for(ref=250;ref<=nod;ref++)
+			c_perfn(ref);
+		normalize();
+		simstrat();
+		continue;
+		}
+	fclose(prd2);
+	return(1);
+	}
+
+
+
+
+
+
+
+
+rd_parms()
+	{
+	char rem[80];
+	char string[30];
+	int x;
+	prd=fopen(parms,"r");
+	if(prd == NULL)
+		{
+		printf("Can't open parameter control file: %s\n",parms);
+		delay(2000);
+		exit(1);
+		}
+	fscanf(prd,"%s\n",&istream1);
+	fscanf(prd,"%s ",&rem);  // read param description
+	fscanf(prd,"%d\n",&tradertype);
+	fscanf(prd,"%s ",&rem);  // read param description
+	fscanf(prd,"%s\n",&mappath);
+	fscanf(prd,"%s ",&rem);  // read param description
+	fscanf(prd,"%d\n",&hide);
+	fscanf(prd,"%s ",&rem);  // read param description
+	fscanf(prd,"%d\n",&virg);
+	fscanf(prd,"%s ",&rem);  // read param description
+	fscanf(prd,"%d\n",&evoptdays);
+	fscanf(prd,"%s ",&rem);  // read param description
+	fscanf(prd,"%d\n",&learn);
+	fscanf(prd,"%s ",&rem);  // read param description
+	fscanf(prd,"%f\n",&rss);
+	fscanf(prd,"%s ",&rem);  // read param description
+        fscanf(prd,"%f\n",&scatterscale);
+	fscanf(prd,"%s ",&rem);  // read param description
+	fscanf(prd,"%d\n",&seed);
+	fscanf(prd,"%s ",&rem);  // read param description
+	fscanf(prd,"%d\n",&gcmaxhold);
+	fscanf(prd,"%s ",&rem);  // read param description
+	fscanf(prd,"%d\n",&gcsmaxhold);
+	fscanf(prd,"%s ",&rem);  // read param description
+	fscanf(prd,"%f\n",&gcfsf);
+	fscanf(prd,"%s ",&rem);  // read param description
+	fscanf(prd,"%d\n",&gclotspertrade);
+	fscanf(prd,"%s ",&rem);  // read param description
+	fscanf(prd,"%d\n",&gcmaxlots);
+	fscanf(prd,"%s ",&rem);  // read param description
+	fscanf(prd,"%f\n",&mltq);
+	fscanf(prd,"%s ",&rem);  // read param description
+	fscanf(prd,"%f\n",&maxweights);
+	fscanf(prd,"%s ",&rem);  // read param description
+	fscanf(prd,"%d\n",&targtype);
+	fscanf(prd,"%s ",&rem);  // read param description
+	fscanf(prd,"%d\n",&fittype);
+	fscanf(prd,"%s ",&rem);  // read param description
+	fscanf(prd,"%d\n",&maptype);
+	fscanf(prd,"%s ",&rem);  // read param description
+	fscanf(prd,"%f\n",&mutrate);
+	fscanf(prd,"%s ",&rem);  // read param description
+        fscanf(prd,"%f\n",&puritythresh);
+	fscanf(prd,"%s ",&rem);  // read param description
+	fscanf(prd,"%d\n",&gcmapscale);
+	fscanf(prd,"%s ",&rem);  // read param description
+        fscanf(prd,"%d\n",&gcmaxsamples);    //tracelength
+	fscanf(prd,"%s ",&rem);  // read param description
+        fscanf(prd,"%d\n",&gcmaxhist);  // trainflook, see assignment below
+	fscanf(prd,"%s ",&rem);  // read param description
+	fscanf(prd,"%ld\n",&maxocount);  // max offspring
+	fscanf(prd,"%s ",&rem);  // read param description
+	fscanf(prd,"%d\n",&numsupportmarkets);
+	fscanf(prd,"%s ",&rem);  // read param description
+        trainflook=gcmaxhist;
+	fscanf(prd,"%s",&istream2);
+	fscanf(prd,"%s",&istream3);
+	fscanf(prd,"%s",&istream4);
+	fscanf(prd,"%s",&istream5);
+	fscanf(prd,"%s",&istream6);
+	fscanf(prd,"%s",&istream7);
+	fscanf(prd,"%s",&istream8);
+	fscanf(prd,"%s",&istream9);
+        fscanf(prd,"%s",&istream21);
+        fscanf(prd,"%s",&istream22);
+        fscanf(prd,"%s",&istream23);
+        fscanf(prd,"%s",&istream24);
+        fscanf(prd,"%s",&istream25);
+        fscanf(prd,"%s",&istream26);
+        fscanf(prd,"%s",&istream27);
+        fscanf(prd,"%s",&istream28);
+        fscanf(prd,"%s",&istream29);
+        fscanf(prd,"%s",&istream30);
+        fscanf(prd,"%s",&istream31);
+        fscanf(prd,"%s",&istream32);
+        fscanf(prd,"%s",&istream33);
+        fscanf(prd,"%s",&istream34);
+        fscanf(prd,"%s",&istream35);
+        fscanf(prd,"%s",&istream36);
+        fscanf(prd,"%s",&istream37);
+        fscanf(prd,"%s",&istream38);
+        fscanf(prd,"%s",&istream39);
+        fscanf(prd,"%s",&istream40);
+        fscanf(prd,"%s",&istream41);
+        fscanf(prd,"%s",&istream42);
+        fscanf(prd,"%s",&istream43);
+        fscanf(prd,"%s",&istream44);
+
+        fscanf(prd,"%s",&istream45);
+        fscanf(prd,"%s",&istream46);
+        fscanf(prd,"%s",&istream47);
+        fscanf(prd,"%s",&istream48);
+        fscanf(prd,"%s",&istream49);
+        fscanf(prd,"%s",&istream50);
+        fscanf(prd,"%s",&istream51);
+        fscanf(prd,"%s",&istream52);
+        fscanf(prd,"%s",&istream53);
+        fscanf(prd,"%s",&istream54);
+        fscanf(prd,"%s",&istream55);
+        fscanf(prd,"%s",&istream56);
+        fscanf(prd,"%s",&istream57);
+        fscanf(prd,"%s",&istream58);
+        fscanf(prd,"%s",&istream59);
+        fscanf(prd,"%s",&istream60);
+
+        fscanf(prd,"%s",&istream61);
+        fscanf(prd,"%s",&istream62);
+        fscanf(prd,"%s",&istream63);
+        fscanf(prd,"%s",&istream64);
+        fscanf(prd,"%s",&istream65);
+        fscanf(prd,"%s",&istream66);
+        fscanf(prd,"%s",&istream67);
+        fscanf(prd,"%s",&istream68);
+        fscanf(prd,"%s",&istream69);
+        fscanf(prd,"%s",&istream70);
+        fscanf(prd,"%s",&istream71);
+        fscanf(prd,"%s",&istream72);
+        fscanf(prd,"%s",&istream73);
+        fscanf(prd,"%s",&istream74);
+        fscanf(prd,"%s",&istream75);
+        fscanf(prd,"%s",&istream76);
+        fscanf(prd,"%s",&istream77);
+        fscanf(prd,"%s",&istream78);
+        fscanf(prd,"%s",&istream79);
+        fscanf(prd,"%s",&istream80);
+        fscanf(prd,"%s",&istream81);
+        fscanf(prd,"%s",&istream82);
+        fscanf(prd,"%s",&istream83);
+        fscanf(prd,"%s",&istream84);
+        fscanf(prd,"%s",&istream85);
+        fscanf(prd,"%s",&istream86);
+        fscanf(prd,"%s",&istream87);
+        fscanf(prd,"%s",&istream88);
+        fscanf(prd,"%s",&istream89);
+        fscanf(prd,"%s",&istream90);
+        fscanf(prd,"%s",&istream91);
+        fscanf(prd,"%s",&istream92);
+        fscanf(prd,"%s",&istream93);
+        fscanf(prd,"%s",&istream94);
+        fscanf(prd,"%s",&istream95);
+        fscanf(prd,"%s",&istream96);
+        fscanf(prd,"%s",&istream97);
+        fscanf(prd,"%s",&istream98);
+        fscanf(prd,"%s",&istream99);
+        fscanf(prd,"%s",&istream100);
+        fscanf(prd,"%s",&istream101);
+        fscanf(prd,"%s",&istream102);
+        fscanf(prd,"%s",&istream103);
+        fscanf(prd,"%s",&istream104);
+        fscanf(prd,"%s",&istream105);
+        fscanf(prd,"%s",&istream106);
+        fscanf(prd,"%s",&istream107);
+        fscanf(prd,"%s",&istream108);
+
+
+
+
+
+
+
+
+        fscanf(prd,"%d\n",&moosb);
+	fscanf(prd,"%s ",&rem);  // read param description
+        fscanf(prd,"%d\n",&moose);
+	fscanf(prd,"%s ",&rem);  // read param description
+	fclose(prd);
+	return(1);
+	}
+	
+run_batch()
+		{
+		char ch;
+        	char string[30];
+		int firstime,origss;
+                int popl;
+		int flag;
+		int ref;
+		int brkflag=0;
+		int n;
+		int genenum;
+		float lastoosfit=-1000000.0;
+		float div;
+		clrscr();
+		firstime=0;
+		flag=0;
+		if(flag == 0 && cbmf != 1)
+			{
+			bsad=0.0;
+			init_avegenfit();
+			gcmaxpass=1;
+			gcstopthresh=1000.0;
+			minstopthresh=999.0; 
+			gcrthresh=1000.0;
+			gcmaxreentry=1;
+			trailing=0;
+			nospreadflag=0;
+			init_pop();
+			bestalltime=0.0;
+			startgen=1;
+			startss=0;
+			}
+		d=0;      // set audit trail off
+		oflag=1;  // set optimization flag on
+		clrscr();
+		if(flag == 0 && cbmf != 1) //start from scratch
+			{
+			ocount=1;
+			//initialize population fitnesses
+			initflag=1;
+			for(ss=0;ss<MAXPOPULATION;ss++)
+				{
+				competitor_ss=ss;
+                                popl=MAXPOPULATION;
+                                printf("                                 INITIALIZING CITIZEN # %d of %d \n",ss,popl);
+				printf("                                 PLEASE BE PATIENT...");
+				calc_params_competitor();
+                                for(fold=1;fold<=10;fold++)
+					{
+					init_map();
+                                        foldwidth=learn/9;
+					foldshift=foldwidth*(fold-1);
+				 //	if(foldshift > (learn-250))
+				 //		foldshift=learn-250;
+					build_map();
+                                        fix_maps();
+					for(ref=250;ref<=nod;ref++)
+						 c_perfn(ref);
+					normalize();
+					simstrat();
+					c_mddsa();
+					calc_fitness_competitor();
+					}
+				printf("Fitness of citizen # %d = %f\n",ss,fitness[competitor_ss]);
+				}
+			}
+		initflag=1;
+		for(EVER)
+			{
+			ocount+=1;
+                        printf("\n\n\n\n\n                                      ****** offspring # %ld\n",ocount);
+			if(brkflag == 1)
+				  break;
+			havesex(); // offspring[genestring] is result
+		 //	mutate();  now done inside have sex function
+			if(mutatedflag)
+				{
+			//   printf("Calculating fitness of mutation\n");
+				calc_params_competitor();
+				init_map();
+                                for(fold=1;fold<=10;fold++)
+					{
+					init_map();
+                                        foldwidth=learn/9;
+					foldshift=foldwidth*(fold-1);
+				 //	if(foldshift > (learn-250))
+				 //		foldshift=learn-250;
+					build_map();
+                                        fix_maps();
+					for(ref=250;ref<=nod;ref++)
+						 c_perfn(ref);
+					normalize();
+					simstrat();
+					c_mddsa();
+					calc_fitness_competitor();
+					}
+				sum=0.0;
+				for(n=0;n<MAXPOPULATION;n++)
+					 sum+=fitness[n];
+				printf("Average Population fitness after mutation = %f\n",sum/n);
+				}
+			if(grtoggle == 1)
+				{
+				gotoxy(0,6);
+				}
+			printf("Calculating fitness of offspring\n");
+			calc_params_offspring();
+			init_map();
+                        for(fold=1;fold<=10;fold++)
+				{
+				init_map();
+                                foldwidth=learn/9;
+				foldshift=foldwidth*(fold-1);
+		    //	if(foldshift > (learn-250))
+		    //		foldshift=learn-250;
+				build_map();
+                                fix_maps();
+				for(ref=250;ref<=nod;ref++)
+					 c_perfn(ref);
+				normalize();
+				simstrat();
+				c_mddsa();
+				calc_fitness_offspring();
+				}
+			if(ocount % 300 == 0) // pump population fitness
+				{
+                                for(ss=0;ss<MAXPOPULATION;ss++)
+					fitness[ss]*=agefactor;
+                                }
+			// find worstss & bestss
+			worstfit=10000.0;
+			bestfit=-10000.0;
+			for(ss=0;ss<MAXPOPULATION;ss++)// find best and worst fitness ss
+				{
+				if(fitness[ss] < worstfit)
+				  {
+				  worstfit=fitness[ss];
+				  worstss=ss;
+				  }
+				if(fitness[ss] > bestfit)
+				  {
+				  bestfit=fitness[ss];
+				  best_ss=ss;
+				  }
+				}
+			for(genenum=0;genenum<MAXGENES;genenum++)
+					 parent[0][genenum]=parent[best_ss][genenum];
+			fitness[0]=bestfit;
+
+
+			//competitor_ss=rand()/(32766/MAXPOPULATION);
+			competitor_ss=worstss;
+			
+			if(fitness_offspring > fitness[competitor_ss])
+				 {
+				 for(genenum=0;genenum<MAXGENES;genenum++)
+					 parent[competitor_ss][genenum]=offspring[genenum];
+				 fitness[competitor_ss]=fitness_offspring;
+				 oosfitness[competitor_ss]=oosfitness_offspring;
+				 printf("Competitor  # %d replaced.............\n",competitor_ss);
+                                 sum=0.0;
+                                 for(n=0;n<MAXPOPULATION;n++)
+					sum+=fitness[n];
+				 }
+
+			printf("Sum Population fitness = %f\n",sum);
+			if(ocount > maxocount)
+				{
+			 /*	get_best_oos();
+				update();
+				simstrat();
+				if(lastoosfit != bestoosfit)
+					{
+					lastoosfit=bestoosfit;
+					mapnamecount+=1;
+					write_OLIVE();
+					}   */
+                                return(1);
+				}   
+			if(kbhit())
+				 {
+				 ch=getch();
+				 if(ch == 't')
+					{
+					if(grtoggle == 1)
+						{  
+						_setvideomode(_DEFAULTMODE);
+						}
+					clrscr();
+					grtoggle*=-1;
+					}
+				 if(ch == 'v')
+					{
+					origss=ss;
+					step();
+					ss=origss;
+					}
+				 if(ch == 'a')
+					{
+					ocount=maxocount;
+					}
+				 if(ch == 'p')
+					{
+					clrscr();
+					printf("\n\tPaused...           Hit C to continue...\n");
+					pause();
+					}
+             		if(ch == 's')
+                    	{
+                    	clrscr();
+                    	printf("\n\n\n\n\n\tEnter graphics scale for return stream: ");
+                    	gets(string);
+					rss=atof(string);
+					}
+				 if(ch == 'z')
+					{
+					clrscr();
+					printf("\n\n\n\n\n\tEnter scale for scattergram: ");
+					gets(string);
+					scatterscale=atof(string);
+					}
+				 if(ch == 'h')
+					{
+					hidetoggle*=-1;
+					}
+			 
+				 if(ch == 'x')
+					{
+					if(grtoggle == 1)
+						{
+						_setvideomode(_DEFAULTMODE);
+						}
+					clrscr();
+					cbmf=1;   //set continue batch mode flag	
+					update();
+					simmenu();
+					break;
+					}
+				 } 
+			}
+		_setvideomode(_DEFAULTMODE);
+		return(1);
+		}
+
+
+get_best_oos()
+	{
+	// find worstss & bestss (oos)
+	int genenum;
+	worstoosfit=10000.0;
+	bestoosfit=-10000.0;
+	for(ss=0;ss<MAXPOPULATION;ss++)// find best and worst oos fitness ss
+		{
+		if(oosfitness[ss] < worstoosfit)
+		  {
+		  worstoosfit=oosfitness[ss];
+		  }
+		if(oosfitness[ss] > bestoosfit)
+		  {
+		  bestoosfit=oosfitness[ss];
+		  best_ss=ss;
+		  }
+		}
+	for(genenum=0;genenum<MAXGENES;genenum++)
+		bestoos[0][genenum]=parent[best_ss][genenum];
+	return(1);
+	}
+
+
+
+
+step()
+    {
+    char string[30];
+    int ref;
+    grtoggle=1;
+    stepflag=1;
+    donestep=0;
+    for(ss=0;ss<MAXPOPULATION;ss++)
+        {
+        competitor_ss=ss;
+        printf("                                 INITIALIZING CITIZEN # %d \n",ss);
+        calc_params_competitor();
+	   init_map();
+           for(fold=1;fold<=10;fold++)
+		{
+		init_map();
+                foldwidth=learn/9;
+		foldshift=foldwidth*(fold-1);
+	 //	if(foldshift > (learn-250))
+	 //		foldshift=learn-250;
+		build_map();
+                fix_maps();
+		for(ref=250;ref<=nod;ref++)
+			 c_perfn(ref);
+		normalize();
+		simstrat();
+		if(donestep == 1)
+			 return(1);
+		c_mddsa();
+		calc_fitness_competitor();
+		}
+	   }
+    stepflag=0;
+    return(1);
+    }
+
+
+
+
+pause()
+	{
+	char ch;
+	for(EVER)
+		{
+		ch=getch();
+			{
+			if(ch == 'c')
+				return(1);
+			else
+				continue;
+			}
+		}
+	return(1);
+	}
+
+
+
+
+
+rd_close()
+	{
+	long ref=0;
+	char string[80];
+	float temp;
+	datatype=0;
+	printf("Single (close) price stream input routine.\n");
+	printf("Can be used for calculating a .prd or mannual map building only.\n");
+	printf("Useful for outputting a .prd stream from previuosly evolved maps.\n");
+	printf("However, evolutions, and simulations must have O,H,L,C formats.\n");
+	printf("Enter single price stream filename, or <enter> to return to menu: ");
+	gets(string);
+	strcpy(istream1,string);
+	printf("%s\n",istream1);
+	djiaf=fopen(string,"r");
+	if(djiaf == NULL)
+		{
+		printf("Can't open %s\n",string);
+		delay(2000);
+		return(1);
+		}
+	printf("Reading %s file\n",string);
+	while(fscanf(djiaf,"%f\n",&temp) != EOF)
+		{
+		c[ref]=temp;
+		ref++;
+		nod=ref-1;
+		continue;
+		}
+	fclose(djiaf);
+	printf("\nNumber of entries = %d\n",nod);
+ //	delay(2000);
+	return(1);
+	}
+
+rd_prices()
+	{
+	int ref=0;
+        float chg;
+	datatype=1;
+
+	if(manualmode)
+		{
+		printf("Enter price stream filename (O,H,L,C format, or *.prn ): ");
+		gets(pricestream);
+		strcpy(istream1,pricestream);
+		}
+	djiaf=fopen(istream1,"r");
+	if(djiaf == NULL)
+		{
+		printf("Can't open %s\n",istream1);
+		delay(2000);
+		return(1);
+		}
+ //	printf("Reading %s file\n",istream1);
+ //	printf("Max file size = 5000 entries");
+        while(fscanf(djiaf,"%f\n]",&c[ref]) != EOF)
+		{
+                o[ref]=c[ref];
+                h[ref]=c[ref];
+                l[ref]=c[ref];
+		ref++;
+		nod=ref-1;
+		continue;
+		}
+	fclose(djiaf);
+        ref=0;
+        djiaf=fopen("\\pr\\d\\vixc.dat","r");
+	if(djiaf == NULL)
+		{
+                printf("Can't open \\pr\\d\\vixc.dat\n");
+		delay(2000);
+		return(1);
+		}
+        while(fscanf(djiaf,"%f\n]",&vixc[ref]) != EOF)
+		{
+		ref++;
+		continue;
+		}
+	fclose(djiaf);
+
+	simstop=nod;
+	simstart=500;
+	return(1);
+	}
+
+
+
+
+ 
+rd_coorprices1()
+	{
+	int ref=0;
+	datatype=1;
+	if(manualmode)
+		{
+		printf("Enter first coordinated price stream filename (single stream format): ");
+		gets(pricestream);
+		strcpy(istream2,pricestream);
+		}
+	djiaf=fopen(istream2,"r");
+	if(djiaf == NULL)
+		{
+		printf("Can't open file %s\n",istream2);
+		return(1);
+		}
+//	printf("Reading %s file\n",istream2);
+//	printf("Max file size = 5000 entries");
+	while(fscanf(djiaf,"%f\n]",&c2[ref]) != EOF)
+		{
+		ref++;
+		nod=ref-1;
+		continue;
+		}
+	fclose(djiaf);
+//	printf("\nNumber of entries = %d\n",nod);
+//	printf("Last record read: %4.2f\n",c2[nod]);
+	simstop=nod;
+	simstart=500;
+	return(1);
+	}
+
+rd_coorprices2()
+	{
+	int ref=0;
+	datatype=1;
+	
+	if(manualmode)
+		{
+		printf("Enter second coordinated price stream filename (single stream format): ");
+		gets(pricestream);
+		strcpy(istream3,pricestream);
+		}
+	djiaf=fopen(istream3,"r");
+	if(djiaf == NULL)
+		{
+		printf("Can't open file %s\n",istream3);
+		return(1);
+		}
+//	printf("Reading %s file\n",istream3);
+//	printf("Max file size = 5000 entries");
+	while(fscanf(djiaf,"%f\n]",&c3[ref]) != EOF)
+		{
+		ref++;
+		nod=ref-1;
+		continue;
+		}
+	fclose(djiaf);
+//	printf("\nNumber of entries = %d\n",nod);
+//	printf("Last record read: %4.2f\n",c3[nod]);
+	simstop=nod;
+	simstart=500;
+	return(1);
+	}
+
+rd_coorprices3()
+	{
+	int ref=0;
+	datatype=1;
+	
+	if(manualmode)
+		{
+		printf("Enter third coordinated price stream filename (single stream format): ");
+		gets(pricestream);
+		strcpy(istream4,pricestream);
+		}
+	djiaf=fopen(istream4,"r");
+	if(djiaf == NULL)
+		{
+		printf("Can't open file %s\n",istream4);
+		return(1);
+		}
+//	printf("Reading %s file\n",istream4);
+//	printf("Max file size = 5000 entries");
+	while(fscanf(djiaf,"%f\n]",&c4[ref]) != EOF)
+		{
+		ref++;
+		nod=ref-1;
+		continue;
+		}
+	fclose(djiaf);
+//	printf("\nNumber of entries = %d\n",nod);
+//	printf("Last record read: %4.2f\n",c4[nod]);
+	simstop=nod;
+	simstart=500;
+	return(1);
+	}
+
+rd_coorprices4()
+	{
+	int ref=0;
+	datatype=1;
+	
+	if(manualmode)
+		{
+		printf("Enter fourth coordinated price stream filename (single stream format): ");
+		gets(pricestream);
+		strcpy(istream5,pricestream);
+		}
+	djiaf=fopen(istream5,"r");
+	if(djiaf == NULL)
+		{
+		printf("Can't open file %s\n",istream5);
+		return(1);
+		}
+	while(fscanf(djiaf,"%f\n]",&c5[ref]) != EOF)
+		{
+		ref++;
+		nod=ref-1;
+		continue;
+		}
+	fclose(djiaf);
+	simstop=nod;
+	simstart=500;
+	return(1);
+	}
+
+rd_coorprices5()
+	{
+	int ref=0;
+	datatype=1;
+	djiaf=fopen(istream6,"r");
+	if(djiaf == NULL)
+		{
+		printf("Can't open file %s\n",istream6);
+		return(1);
+		}
+	while(fscanf(djiaf,"%f\n]",&c6[ref]) != EOF)
+		{
+		ref++;
+		nod=ref-1;
+		continue;
+		}
+	fclose(djiaf);
+	simstop=nod;
+	simstart=500;
+	return(1);
+	}
+
+rd_coorprices6()
+	{
+	int ref=0;
+	datatype=1;
+	djiaf=fopen(istream7,"r");
+	if(djiaf == NULL)
+		{
+		printf("Can't open file %s\n",istream7);
+		return(1);
+		}
+	while(fscanf(djiaf,"%f\n]",&c7[ref]) != EOF)
+		{
+		ref++;
+		nod=ref-1;
+		continue;
+		}
+	fclose(djiaf);
+	simstop=nod;
+	simstart=500;
+	return(1);
+	}
+
+
+
+rd_coorprices7()
+	{
+	int ref=0;
+	datatype=1;
+	djiaf=fopen(istream8,"r");
+	if(djiaf == NULL)
+		{
+		printf("Can't open file %s\n",istream8);
+		return(1);
+		}
+	while(fscanf(djiaf,"%f\n]",&c8[ref]) != EOF)
+		{
+		ref++;
+		nod=ref-1;
+		continue;
+		}
+	fclose(djiaf);
+	simstop=nod;
+	simstart=500;
+	return(1);
+	}
+
+rd_coorprices8()
+	{
+	int ref=0;
+	datatype=1;
+	djiaf=fopen(istream9,"r");
+	if(djiaf == NULL)
+		{
+		printf("Can't open file %s\n",istream9);
+		return(1);
+		}
+	while(fscanf(djiaf,"%f\n]",&c9[ref]) != EOF)
+		{
+		ref++;
+		nod=ref-1;
+		continue;
+		}
+	fclose(djiaf);
+	simstop=nod;
+	simstart=500;
+	return(1);
+	}
+
+
+rd_coorprices9()
+	{
+	int ref=0;
+	datatype=1;
+        djiaf=fopen(istream21,"r");
+	if(djiaf == NULL)
+		{
+                printf("Can't open file %s\n",istream21);
+		return(1);
+		}
+        while(fscanf(djiaf,"%f\n]",&c10[ref]) != EOF)
+		{
+		ref++;
+		nod=ref-1;
+		continue;
+		}
+	fclose(djiaf);
+	simstop=nod;
+	simstart=500;
+	return(1);
+	}
+
+rd_coorprices10()
+	{
+	int ref=0;
+	datatype=1;
+        djiaf=fopen(istream22,"r");
+	if(djiaf == NULL)
+		{
+                printf("Can't open file %s\n",istream22);
+		return(1);
+		}
+        while(fscanf(djiaf,"%f\n]",&c11[ref]) != EOF)
+		{
+		ref++;
+		nod=ref-1;
+		continue;
+		}
+	fclose(djiaf);
+	simstop=nod;
+	simstart=500;
+	return(1);
+	}
+
+rd_coorprices11()
+	{
+	int ref=0;
+	datatype=1;
+        djiaf=fopen(istream23,"r");
+	if(djiaf == NULL)
+		{
+                printf("Can't open file %s\n",istream23);
+		return(1);
+		}
+        while(fscanf(djiaf,"%f\n]",&c12[ref]) != EOF)
+		{
+		ref++;
+		nod=ref-1;
+		continue;
+		}
+	fclose(djiaf);
+	simstop=nod;
+	simstart=500;
+	return(1);
+	}
+
+rd_coorprices12()
+	{
+	int ref=0;
+	datatype=1;
+        djiaf=fopen(istream24,"r");
+	if(djiaf == NULL)
+		{
+                printf("Can't open file %s\n",istream24);
+		return(1);
+		}
+        while(fscanf(djiaf,"%f\n]",&c13[ref]) != EOF)
+		{
+		ref++;
+		nod=ref-1;
+		continue;
+		}
+	fclose(djiaf);
+	simstop=nod;
+	simstart=500;
+	return(1);
+	}
+
+rd_coorprices13()
+	{
+	int ref=0;
+	datatype=1;
+        djiaf=fopen(istream25,"r");
+	if(djiaf == NULL)
+		{
+                printf("Can't open file %s\n",istream25);
+		return(1);
+		}
+        while(fscanf(djiaf,"%f\n]",&c14[ref]) != EOF)
+		{
+		ref++;
+		nod=ref-1;
+		continue;
+		}
+	fclose(djiaf);
+	simstop=nod;
+	simstart=500;
+	return(1);
+	}
+
+rd_coorprices14()
+	{
+	int ref=0;
+	datatype=1;
+        djiaf=fopen(istream26,"r");
+	if(djiaf == NULL)
+		{
+                printf("Can't open file %s\n",istream26);
+		return(1);
+		}
+        while(fscanf(djiaf,"%f\n]",&c15[ref]) != EOF)
+		{
+		ref++;
+		nod=ref-1;
+		continue;
+		}
+	fclose(djiaf);
+	simstop=nod;
+	simstart=500;
+	return(1);
+	}
+
+rd_coorprices15()
+	{
+	int ref=0;
+	datatype=1;
+        djiaf=fopen(istream27,"r");
+	if(djiaf == NULL)
+		{
+                printf("Can't open file %s\n",istream27);
+		return(1);
+		}
+        while(fscanf(djiaf,"%f\n]",&c16[ref]) != EOF)
+		{
+		ref++;
+		nod=ref-1;
+		continue;
+		}
+	fclose(djiaf);
+	simstop=nod;
+	simstart=500;
+	return(1);
+	}
+
+rd_coorprices16()
+	{
+	int ref=0;
+	datatype=1;
+        djiaf=fopen(istream28,"r");
+	if(djiaf == NULL)
+		{
+                printf("Can't open file %s\n",istream28);
+                delay(10000);
+                exit(1);
+		}
+        while(fscanf(djiaf,"%f\n]",&c17[ref]) != EOF)
+		{
+		ref++;
+		nod=ref-1;
+		continue;
+		}
+	fclose(djiaf);
+	return(1);
+	}
+
+rd_coorprices17()
+	{
+	int ref=0;
+	datatype=1;
+        djiaf=fopen(istream29,"r");
+	if(djiaf == NULL)
+		{
+                printf("Can't open file %s\n",istream29);
+                delay(10000);
+                exit(1);
+		}
+        while(fscanf(djiaf,"%f\n]",&c18[ref]) != EOF)
+		{
+		ref++;
+		nod=ref-1;
+		continue;
+		}
+	fclose(djiaf);
+	return(1);
+	}
+
+rd_coorprices18()
+	{
+	int ref=0;
+	datatype=1;
+        djiaf=fopen(istream30,"r");
+	if(djiaf == NULL)
+		{
+                printf("Can't open file %s\n",istream30);
+                delay(10000);
+                exit(1);
+		}
+        while(fscanf(djiaf,"%f\n]",&c19[ref]) != EOF)
+		{
+		ref++;
+		nod=ref-1;
+		continue;
+		}
+	fclose(djiaf);
+	return(1);
+	}
+
+rd_coorprices19()
+	{
+	int ref=0;
+	datatype=1;
+        djiaf=fopen(istream31,"r");
+	if(djiaf == NULL)
+		{
+                printf("Can't open file %s\n",istream31);
+                delay(10000);
+                exit(1);
+		}
+        while(fscanf(djiaf,"%f\n]",&c20[ref]) != EOF)
+		{
+		ref++;
+		nod=ref-1;
+		continue;
+		}
+	fclose(djiaf);
+	return(1);
+	}
+
+rd_coorprices20()
+	{
+	int ref=0;
+	datatype=1;
+        djiaf=fopen(istream32,"r");
+	if(djiaf == NULL)
+		{
+                printf("Can't open file %s\n",istream32);
+                delay(10000);
+                exit(1);
+		}
+        while(fscanf(djiaf,"%f\n]",&c21[ref]) != EOF)
+		{
+		ref++;
+		nod=ref-1;
+		continue;
+		}
+	fclose(djiaf);
+	return(1);
+	}
+
+rd_coorprices21()
+	{
+	int ref=0;
+	datatype=1;
+        djiaf=fopen(istream33,"r");
+	if(djiaf == NULL)
+		{
+                printf("Can't open file %s\n",istream33);
+                delay(10000);
+                exit(1);
+		}
+        while(fscanf(djiaf,"%f\n]",&c22[ref]) != EOF)
+		{
+		ref++;
+		nod=ref-1;
+		continue;
+		}
+	fclose(djiaf);
+	return(1);
+	}
+
+
+rd_coorprices22()
+	{
+	int ref=0;
+	datatype=1;
+        djiaf=fopen(istream34,"r");
+	if(djiaf == NULL)
+		{
+                printf("Can't open file %s\n",istream34);
+                delay(10000);
+                exit(1);
+		}
+        while(fscanf(djiaf,"%f\n]",&c23[ref]) != EOF)
+		{
+		ref++;
+		nod=ref-1;
+		continue;
+		}
+	fclose(djiaf);
+	return(1);
+	}
+
+rd_coorprices23()
+	{
+	int ref=0;
+	datatype=1;
+        djiaf=fopen(istream35,"r");
+	if(djiaf == NULL)
+		{
+                printf("Can't open file %s\n",istream35);
+                delay(10000);
+                exit(1);
+		}
+        while(fscanf(djiaf,"%f\n]",&c24[ref]) != EOF)
+		{
+		ref++;
+		nod=ref-1;
+		continue;
+		}
+	fclose(djiaf);
+	return(1);
+	}
+
+rd_coorprices24()
+	{
+	int ref=0;
+	datatype=1;
+        djiaf=fopen(istream36,"r");
+	if(djiaf == NULL)
+		{
+                printf("Can't open file %s\n",istream36);
+                delay(10000);
+                exit(1);
+		}
+        while(fscanf(djiaf,"%f\n]",&c25[ref]) != EOF)
+		{
+		ref++;
+		nod=ref-1;
+		continue;
+		}
+	fclose(djiaf);
+	return(1);
+	}
+
+rd_coorprices25()
+	{
+	int ref=0;
+	datatype=1;
+        djiaf=fopen(istream37,"r");
+	if(djiaf == NULL)
+		{
+                printf("Can't open file %s\n",istream37);
+                delay(10000);
+                exit(1);
+		}
+        while(fscanf(djiaf,"%f\n]",&c26[ref]) != EOF)
+		{
+		ref++;
+		nod=ref-1;
+		continue;
+		}
+	fclose(djiaf);
+	return(1);
+	}
+
+rd_coorprices26()
+	{
+	int ref=0;
+	datatype=1;
+        djiaf=fopen(istream38,"r");
+	if(djiaf == NULL)
+		{
+                printf("Can't open file %s\n",istream38);
+                delay(10000);
+                exit(1);
+		}
+        while(fscanf(djiaf,"%f\n]",&c27[ref]) != EOF)
+		{
+		ref++;
+		nod=ref-1;
+		continue;
+		}
+	fclose(djiaf);
+	return(1);
+	}
+
+rd_coorprices27()
+	{
+	int ref=0;
+	datatype=1;
+        djiaf=fopen(istream39,"r");
+	if(djiaf == NULL)
+		{
+                printf("Can't open file %s\n",istream39);
+                delay(10000);
+                exit(1);
+		}
+        while(fscanf(djiaf,"%f\n]",&c28[ref]) != EOF)
+		{
+		ref++;
+		nod=ref-1;
+		continue;
+		}
+	fclose(djiaf);
+	return(1);
+	}
+
+rd_coorprices28()
+	{
+	int ref=0;
+	datatype=1;
+        djiaf=fopen(istream40,"r");
+	if(djiaf == NULL)
+		{
+                printf("Can't open file %s\n",istream40);
+                delay(10000);
+                exit(1);
+		}
+        while(fscanf(djiaf,"%f\n]",&c29[ref]) != EOF)
+		{
+		ref++;
+		nod=ref-1;
+		continue;
+		}
+	fclose(djiaf);
+	return(1);
+	}
+
+rd_coorprices29()
+	{
+	int ref=0;
+	datatype=1;
+        djiaf=fopen(istream41,"r");
+	if(djiaf == NULL)
+		{
+                printf("Can't open file %s\n",istream41);
+                delay(10000);
+                exit(1);
+		}
+        while(fscanf(djiaf,"%f\n]",&c30[ref]) != EOF)
+		{
+		ref++;
+		nod=ref-1;
+		continue;
+		}
+	fclose(djiaf);
+	return(1);
+	}
+
+rd_coorprices30()
+	{
+	int ref=0;
+	datatype=1;
+        djiaf=fopen(istream42,"r");
+	if(djiaf == NULL)
+		{
+                printf("Can't open file %s\n",istream42);
+                delay(10000);
+                exit(1);
+		}
+        while(fscanf(djiaf,"%f\n]",&c31[ref]) != EOF)
+		{
+		ref++;
+		nod=ref-1;
+		continue;
+		}
+	fclose(djiaf);
+	return(1);
+	}
+
+rd_coorprices31()
+	{
+	int ref=0;
+	datatype=1;
+        djiaf=fopen(istream43,"r");
+	if(djiaf == NULL)
+		{
+                printf("Can't open file %s\n",istream43);
+                delay(10000);
+                exit(1);
+		}
+        while(fscanf(djiaf,"%f\n]",&c32[ref]) != EOF)
+		{
+		ref++;
+		nod=ref-1;
+		continue;
+		}
+	fclose(djiaf);
+	return(1);
+	}
+
+rd_coorprices32()
+	{
+	int ref=0;
+	datatype=1;
+        djiaf=fopen(istream44,"r");
+	if(djiaf == NULL)
+		{
+                printf("Can't open file %s\n",istream44);
+                delay(10000);
+                exit(1);
+		}
+        while(fscanf(djiaf,"%f\n]",&c33[ref]) != EOF)
+		{
+		ref++;
+		nod=ref-1;
+		continue;
+		}
+	fclose(djiaf);
+	return(1);
+	}
+
+
+rd_coorprices33()
+	{
+	int ref=0;
+	datatype=1;
+        djiaf=fopen(istream45,"r");
+	if(djiaf == NULL)
+		{
+                printf("Can't open file %s\n",istream45);
+                delay(10000);
+                exit(1);
+		}
+        while(fscanf(djiaf,"%f\n]",&c34[ref]) != EOF)
+		{
+		ref++;
+		nod=ref-1;
+		continue;
+		}
+	fclose(djiaf);
+	return(1);
+	}
+
+rd_coorprices34()
+	{
+	int ref=0;
+	datatype=1;
+        djiaf=fopen(istream46,"r");
+	if(djiaf == NULL)
+		{
+                printf("Can't open file %s\n",istream46);
+                delay(10000);
+                exit(1);
+		}
+        while(fscanf(djiaf,"%f\n]",&c35[ref]) != EOF)
+		{
+		ref++;
+		nod=ref-1;
+		continue;
+		}
+	fclose(djiaf);
+	return(1);
+	}
+
+
+rd_coorprices35()
+	{
+	int ref=0;
+	datatype=1;
+        djiaf=fopen(istream47,"r");
+	if(djiaf == NULL)
+		{
+                printf("Can't open file %s\n",istream47);
+                delay(10000);
+                exit(1);
+		}
+        while(fscanf(djiaf,"%f\n]",&c36[ref]) != EOF)
+		{
+		ref++;
+		nod=ref-1;
+		continue;
+		}
+	fclose(djiaf);
+	return(1);
+	}
+
+
+rd_coorprices36()
+	{
+	int ref=0;
+	datatype=1;
+        djiaf=fopen(istream48,"r");
+	if(djiaf == NULL)
+		{
+                printf("Can't open file %s\n",istream48);
+                delay(10000);
+                exit(1);
+		}
+        while(fscanf(djiaf,"%f\n]",&c37[ref]) != EOF)
+		{
+		ref++;
+		nod=ref-1;
+		continue;
+		}
+	fclose(djiaf);
+	return(1);
+	}
+
+
+rd_coorprices37()
+	{
+	int ref=0;
+	datatype=1;
+        djiaf=fopen(istream49,"r");
+	if(djiaf == NULL)
+		{
+                printf("Can't open file %s\n",istream49);
+                delay(10000);
+                exit(1);
+		}
+        while(fscanf(djiaf,"%f\n]",&c38[ref]) != EOF)
+		{
+		ref++;
+		nod=ref-1;
+		continue;
+		}
+	fclose(djiaf);
+	return(1);
+	}
+
+
+rd_coorprices38()
+	{
+	int ref=0;
+	datatype=1;
+        djiaf=fopen(istream50,"r");
+	if(djiaf == NULL)
+		{
+                printf("Can't open file %s\n",istream50);
+                delay(10000);
+                exit(1);
+		}
+        while(fscanf(djiaf,"%f\n]",&c39[ref]) != EOF)
+		{
+		ref++;
+		nod=ref-1;
+		continue;
+		}
+	fclose(djiaf);
+	return(1);
+	}
+
+
+rd_coorprices39()
+	{
+	int ref=0;
+	datatype=1;
+        djiaf=fopen(istream51,"r");
+	if(djiaf == NULL)
+		{
+                printf("Can't open file %s\n",istream51);
+                delay(10000);
+                exit(1);
+		}
+        while(fscanf(djiaf,"%f\n]",&c40[ref]) != EOF)
+		{
+		ref++;
+		nod=ref-1;
+		continue;
+		}
+	fclose(djiaf);
+	return(1);
+	}
+
+
+rd_coorprices40()
+	{
+	int ref=0;
+	datatype=1;
+        djiaf=fopen(istream52,"r");
+	if(djiaf == NULL)
+		{
+                printf("Can't open file %s\n",istream52);
+                delay(10000);
+                exit(1);
+		}
+        while(fscanf(djiaf,"%f\n]",&c41[ref]) != EOF)
+		{
+		ref++;
+		nod=ref-1;
+		continue;
+		}
+	fclose(djiaf);
+	return(1);
+	}
+
+
+rd_coorprices41()
+	{
+	int ref=0;
+	datatype=1;
+        djiaf=fopen(istream53,"r");
+	if(djiaf == NULL)
+		{
+                printf("Can't open file %s\n",istream53);
+                delay(10000);
+                exit(1);
+		}
+        while(fscanf(djiaf,"%f\n]",&c42[ref]) != EOF)
+		{
+		ref++;
+		nod=ref-1;
+		continue;
+		}
+	fclose(djiaf);
+	return(1);
+	}
+
+
+rd_coorprices42()
+	{
+	int ref=0;
+	datatype=1;
+        djiaf=fopen(istream54,"r");
+	if(djiaf == NULL)
+		{
+                printf("Can't open file %s\n",istream54);
+                delay(10000);
+                exit(1);
+		}
+        while(fscanf(djiaf,"%f\n]",&c43[ref]) != EOF)
+		{
+		ref++;
+		nod=ref-1;
+		continue;
+		}
+	fclose(djiaf);
+	return(1);
+	}
+
+rd_coorprices43()
+	{
+	int ref=0;
+	datatype=1;
+        djiaf=fopen(istream55,"r");
+	if(djiaf == NULL)
+		{
+                printf("Can't open file %s\n",istream55);
+                delay(10000);
+                exit(1);
+		}
+        while(fscanf(djiaf,"%f\n]",&c44[ref]) != EOF)
+		{
+		ref++;
+		nod=ref-1;
+		continue;
+		}
+	fclose(djiaf);
+	return(1);
+	}
+
+
+rd_coorprices44()
+	{
+	int ref=0;
+	datatype=1;
+        djiaf=fopen(istream56,"r");
+	if(djiaf == NULL)
+		{
+                printf("Can't open file %s\n",istream56);
+                delay(10000);
+                exit(1);
+		}
+        while(fscanf(djiaf,"%f\n]",&c45[ref]) != EOF)
+		{
+		ref++;
+		nod=ref-1;
+		continue;
+		}
+	fclose(djiaf);
+	return(1);
+	}
+
+
+rd_coorprices45()
+	{
+	int ref=0;
+	datatype=1;
+        djiaf=fopen(istream57,"r");
+	if(djiaf == NULL)
+		{
+                printf("Can't open file %s\n",istream57);
+                delay(10000);
+                exit(1);
+		}
+        while(fscanf(djiaf,"%f\n]",&c46[ref]) != EOF)
+		{
+		ref++;
+		nod=ref-1;
+		continue;
+		}
+	fclose(djiaf);
+	return(1);
+	}
+
+
+rd_coorprices46()
+	{
+	int ref=0;
+	datatype=1;
+        djiaf=fopen(istream58,"r");
+	if(djiaf == NULL)
+		{
+                printf("Can't open file %s\n",istream58);
+                delay(10000);
+                exit(1);
+		}
+        while(fscanf(djiaf,"%f\n]",&c47[ref]) != EOF)
+		{
+		ref++;
+		nod=ref-1;
+		continue;
+		}
+	fclose(djiaf);
+	return(1);
+	}
+
+
+rd_coorprices47()
+	{
+	int ref=0;
+	datatype=1;
+        djiaf=fopen(istream59,"r");
+	if(djiaf == NULL)
+		{
+                printf("Can't open file %s\n",istream59);
+                delay(10000);
+                exit(1);
+		}
+        while(fscanf(djiaf,"%f\n]",&c48[ref]) != EOF)
+		{
+		ref++;
+		nod=ref-1;
+		continue;
+		}
+	fclose(djiaf);
+	return(1);
+	}
+
+
+rd_coorprices48()
+	{
+	int ref=0;
+	datatype=1;
+        djiaf=fopen(istream60,"r");
+	if(djiaf == NULL)
+		{
+                printf("Can't open file %s\n",istream60);
+                delay(10000);
+                exit(1);
+		}
+        while(fscanf(djiaf,"%f\n]",&c49[ref]) != EOF)
+		{
+		ref++;
+		nod=ref-1;
+		continue;
+		}
+	fclose(djiaf);
+	return(1);
+	}
+
+
+rd_coorprices49()
+	{
+	int ref=0;
+	datatype=1;
+        djiaf=fopen(istream61,"r");
+	if(djiaf == NULL)
+		{
+                printf("Can't open file %s\n",istream61);
+                delay(10000);
+                exit(1);
+		}
+        while(fscanf(djiaf,"%f\n]",&c50[ref]) != EOF)
+		{
+		ref++;
+		nod=ref-1;
+		continue;
+		}
+	fclose(djiaf);
+	return(1);
+	}
+
+rd_coorprices50()
+	{
+	int ref=0;
+	datatype=1;
+        djiaf=fopen(istream62,"r");
+	if(djiaf == NULL)
+		{
+                printf("Can't open file %s\n",istream62);
+                delay(10000);
+                exit(1);
+		}
+        while(fscanf(djiaf,"%f\n]",&c51[ref]) != EOF)
+		{
+		ref++;
+		nod=ref-1;
+		continue;
+		}
+	fclose(djiaf);
+	return(1);
+	}
+
+rd_coorprices51()
+	{
+	int ref=0;
+	datatype=1;
+        djiaf=fopen(istream63,"r");
+	if(djiaf == NULL)
+		{
+                printf("Can't open file %s\n",istream63);
+                delay(10000);
+                exit(1);
+		}
+        while(fscanf(djiaf,"%f\n]",&c52[ref]) != EOF)
+		{
+		ref++;
+		nod=ref-1;
+		continue;
+		}
+	fclose(djiaf);
+	return(1);
+	}
+
+rd_coorprices52()
+	{
+	int ref=0;
+	datatype=1;
+        djiaf=fopen(istream64,"r");
+	if(djiaf == NULL)
+		{
+                printf("Can't open file %s\n",istream64);
+                delay(10000);
+                exit(1);
+		}
+        while(fscanf(djiaf,"%f\n]",&c53[ref]) != EOF)
+		{
+		ref++;
+		nod=ref-1;
+		continue;
+		}
+	fclose(djiaf);
+	return(1);
+	}
+
+
+rd_coorprices53()
+	{
+	int ref=0;
+	datatype=1;
+        djiaf=fopen(istream65,"r");
+	if(djiaf == NULL)
+		{
+                printf("Can't open file %s\n",istream65);
+                delay(10000);
+                exit(1);
+		}
+        while(fscanf(djiaf,"%f\n]",&c54[ref]) != EOF)
+		{
+		ref++;
+		nod=ref-1;
+		continue;
+		}
+	fclose(djiaf);
+	return(1);
+	}
+
+rd_coorprices54()
+	{
+	int ref=0;
+	datatype=1;
+        djiaf=fopen(istream66,"r");
+	if(djiaf == NULL)
+		{
+                printf("Can't open file %s\n",istream66);
+                delay(10000);
+                exit(1);
+		}
+        while(fscanf(djiaf,"%f\n]",&c55[ref]) != EOF)
+		{
+		ref++;
+		nod=ref-1;
+		continue;
+		}
+	fclose(djiaf);
+	return(1);
+	}
+
+rd_coorprices55()
+	{
+	int ref=0;
+	datatype=1;
+        djiaf=fopen(istream67,"r");
+	if(djiaf == NULL)
+		{
+                printf("Can't open file %s\n",istream67);
+                delay(10000);
+                exit(1);
+		}
+        while(fscanf(djiaf,"%f\n]",&c56[ref]) != EOF)
+		{
+		ref++;
+		nod=ref-1;
+		continue;
+		}
+	fclose(djiaf);
+	return(1);
+	}
+
+
+rd_coorprices56()
+	{
+	int ref=0;
+	datatype=1;
+        djiaf=fopen(istream68,"r");
+	if(djiaf == NULL)
+		{
+                printf("Can't open file %s\n",istream68);
+                delay(10000);
+                exit(1);
+		}
+        while(fscanf(djiaf,"%f\n]",&c57[ref]) != EOF)
+		{
+		ref++;
+		nod=ref-1;
+		continue;
+		}
+	fclose(djiaf);
+	return(1);
+	}
+
+rd_coorprices57()
+	{
+	int ref=0;
+	datatype=1;
+        djiaf=fopen(istream69,"r");
+	if(djiaf == NULL)
+		{
+                printf("Can't open file %s\n",istream69);
+                delay(10000);
+                exit(1);
+		}
+        while(fscanf(djiaf,"%f\n]",&c58[ref]) != EOF)
+		{
+		ref++;
+		nod=ref-1;
+		continue;
+		}
+	fclose(djiaf);
+	return(1);
+	}
+
+
+rd_coorprices58()
+	{
+	int ref=0;
+	datatype=1;
+        djiaf=fopen(istream70,"r");
+	if(djiaf == NULL)
+		{
+                printf("Can't open file %s\n",istream70);
+                delay(10000);
+                exit(1);
+		}
+        while(fscanf(djiaf,"%f\n]",&c59[ref]) != EOF)
+		{
+		ref++;
+		nod=ref-1;
+		continue;
+		}
+	fclose(djiaf);
+	return(1);
+	}
+
+rd_coorprices59()
+	{
+	int ref=0;
+	datatype=1;
+        djiaf=fopen(istream71,"r");
+	if(djiaf == NULL)
+		{
+                printf("Can't open file %s\n",istream71);
+                delay(10000);
+                exit(1);
+		}
+        while(fscanf(djiaf,"%f\n]",&c60[ref]) != EOF)
+		{
+		ref++;
+		nod=ref-1;
+		continue;
+		}
+	fclose(djiaf);
+	return(1);
+	}
+
+rd_coorprices60()
+	{
+	int ref=0;
+	datatype=1;
+        djiaf=fopen(istream72,"r");
+	if(djiaf == NULL)
+		{
+                printf("Can't open file %s\n",istream72);
+                delay(10000);
+                exit(1);
+		}
+        while(fscanf(djiaf,"%f\n]",&c61[ref]) != EOF)
+		{
+		ref++;
+		nod=ref-1;
+		continue;
+		}
+	fclose(djiaf);
+	return(1);
+	}
+
+rd_coorprices61()
+	{
+	int ref=0;
+	datatype=1;
+        djiaf=fopen(istream73,"r");
+	if(djiaf == NULL)
+		{
+                printf("Can't open file %s\n",istream73);
+                delay(10000);
+                exit(1);
+		}
+        while(fscanf(djiaf,"%f\n]",&c62[ref]) != EOF)
+		{
+		ref++;
+		nod=ref-1;
+		continue;
+		}
+	fclose(djiaf);
+	return(1);
+	}
+
+rd_coorprices62()
+	{
+	int ref=0;
+	datatype=1;
+        djiaf=fopen(istream74,"r");
+	if(djiaf == NULL)
+		{
+                printf("Can't open file %s\n",istream74);
+                delay(10000);
+                exit(1);
+		}
+        while(fscanf(djiaf,"%f\n]",&c63[ref]) != EOF)
+		{
+		ref++;
+		nod=ref-1;
+		continue;
+		}
+	fclose(djiaf);
+	return(1);
+	}
+
+rd_coorprices63()
+	{
+	int ref=0;
+	datatype=1;
+        djiaf=fopen(istream75,"r");
+	if(djiaf == NULL)
+		{
+                printf("Can't open file %s\n",istream75);
+                delay(10000);
+                exit(1);
+		}
+        while(fscanf(djiaf,"%f\n]",&c64[ref]) != EOF)
+		{
+		ref++;
+		nod=ref-1;
+		continue;
+		}
+	fclose(djiaf);
+	return(1);
+	}
+
+rd_coorprices64()
+	{
+	int ref=0;
+	datatype=1;
+        djiaf=fopen(istream76,"r");
+	if(djiaf == NULL)
+		{
+                printf("Can't open file %s\n",istream76);
+                delay(10000);
+                exit(1);
+		}
+        while(fscanf(djiaf,"%f\n]",&c65[ref]) != EOF)
+		{
+		ref++;
+		nod=ref-1;
+		continue;
+		}
+	fclose(djiaf);
+	return(1);
+	}
+
+rd_coorprices65()
+	{
+	int ref=0;
+	datatype=1;
+        djiaf=fopen(istream77,"r");
+	if(djiaf == NULL)
+		{
+                printf("Can't open file %s\n",istream77);
+                delay(10000);
+                exit(1);
+		}
+        while(fscanf(djiaf,"%f\n]",&c66[ref]) != EOF)
+		{
+		ref++;
+		nod=ref-1;
+		continue;
+		}
+	fclose(djiaf);
+	return(1);
+	}
+
+rd_coorprices66()
+	{
+	int ref=0;
+	datatype=1;
+        djiaf=fopen(istream78,"r");
+	if(djiaf == NULL)
+		{
+                printf("Can't open file %s\n",istream78);
+                delay(10000);
+                exit(1);
+		}
+        while(fscanf(djiaf,"%f\n]",&c67[ref]) != EOF)
+		{
+		ref++;
+		nod=ref-1;
+		continue;
+		}
+	fclose(djiaf);
+	return(1);
+	}
+
+rd_coorprices67()
+	{
+	int ref=0;
+	datatype=1;
+        djiaf=fopen(istream79,"r");
+	if(djiaf == NULL)
+		{
+                printf("Can't open file %s\n",istream79);
+                delay(10000);
+                exit(1);
+		}
+        while(fscanf(djiaf,"%f\n]",&c68[ref]) != EOF)
+		{
+		ref++;
+		nod=ref-1;
+		continue;
+		}
+	fclose(djiaf);
+	return(1);
+	}
+
+rd_coorprices68()
+	{
+	int ref=0;
+	datatype=1;
+        djiaf=fopen(istream80,"r");
+	if(djiaf == NULL)
+		{
+                printf("Can't open file %s\n",istream80);
+                delay(10000);
+                exit(1);
+		}
+        while(fscanf(djiaf,"%f\n]",&c69[ref]) != EOF)
+		{
+		ref++;
+		nod=ref-1;
+		continue;
+		}
+	fclose(djiaf);
+	return(1);
+	}
+
+rd_coorprices69()
+	{
+	int ref=0;
+	datatype=1;
+        djiaf=fopen(istream81,"r");
+	if(djiaf == NULL)
+		{
+                printf("Can't open file %s\n",istream81);
+                delay(10000);
+                exit(1);
+		}
+        while(fscanf(djiaf,"%f\n]",&c70[ref]) != EOF)
+		{
+		ref++;
+		nod=ref-1;
+		continue;
+		}
+	fclose(djiaf);
+	return(1);
+	}
+
+rd_coorprices70()
+	{
+	int ref=0;
+	datatype=1;
+        djiaf=fopen(istream82,"r");
+	if(djiaf == NULL)
+		{
+                printf("Can't open file %s\n",istream82);
+                delay(10000);
+                exit(1);
+		}
+        while(fscanf(djiaf,"%f\n]",&c71[ref]) != EOF)
+		{
+		ref++;
+		nod=ref-1;
+		continue;
+		}
+	fclose(djiaf);
+	return(1);
+	}
+
+rd_coorprices71()
+	{
+	int ref=0;
+	datatype=1;
+        djiaf=fopen(istream83,"r");
+	if(djiaf == NULL)
+		{
+                printf("Can't open file %s\n",istream83);
+                delay(10000);
+                exit(1);
+		}
+        while(fscanf(djiaf,"%f\n]",&c72[ref]) != EOF)
+		{
+		ref++;
+		nod=ref-1;
+		continue;
+		}
+	fclose(djiaf);
+	return(1);
+	}
+
+rd_coorprices72()
+	{
+	int ref=0;
+	datatype=1;
+        djiaf=fopen(istream84,"r");
+	if(djiaf == NULL)
+		{
+                printf("Can't open file %s\n",istream84);
+                delay(10000);
+                exit(1);
+		}
+        while(fscanf(djiaf,"%f\n]",&c73[ref]) != EOF)
+		{
+		ref++;
+		nod=ref-1;
+		continue;
+		}
+	fclose(djiaf);
+	return(1);
+	}
+
+rd_coorprices73()
+	{
+	int ref=0;
+	datatype=1;
+        djiaf=fopen(istream85,"r");
+	if(djiaf == NULL)
+		{
+                printf("Can't open file %s\n",istream85);
+                delay(10000);
+                exit(1);
+		}
+        while(fscanf(djiaf,"%f\n]",&c74[ref]) != EOF)
+		{
+		ref++;
+		nod=ref-1;
+		continue;
+		}
+	fclose(djiaf);
+	return(1);
+	}
+
+rd_coorprices74()
+	{
+	int ref=0;
+	datatype=1;
+        djiaf=fopen(istream86,"r");
+	if(djiaf == NULL)
+		{
+                printf("Can't open file %s\n",istream86);
+                delay(10000);
+                exit(1);
+		}
+        while(fscanf(djiaf,"%f\n]",&c75[ref]) != EOF)
+		{
+		ref++;
+		nod=ref-1;
+		continue;
+		}
+	fclose(djiaf);
+	return(1);
+	}
+
+rd_coorprices75()
+	{
+	int ref=0;
+	datatype=1;
+        djiaf=fopen(istream87,"r");
+	if(djiaf == NULL)
+		{
+                printf("Can't open file %s\n",istream87);
+                delay(10000);
+                exit(1);
+		}
+        while(fscanf(djiaf,"%f\n]",&c76[ref]) != EOF)
+		{
+		ref++;
+		nod=ref-1;
+		continue;
+		}
+	fclose(djiaf);
+	return(1);
+	}
+
+rd_coorprices76()
+	{
+	int ref=0;
+	datatype=1;
+        djiaf=fopen(istream88,"r");
+	if(djiaf == NULL)
+		{
+                printf("Can't open file %s\n",istream88);
+                delay(10000);
+                exit(1);
+		}
+        while(fscanf(djiaf,"%f\n]",&c77[ref]) != EOF)
+		{
+		ref++;
+		nod=ref-1;
+		continue;
+		}
+	fclose(djiaf);
+	return(1);
+	}
+
+rd_coorprices77()
+	{
+	int ref=0;
+	datatype=1;
+        djiaf=fopen(istream89,"r");
+	if(djiaf == NULL)
+		{
+                printf("Can't open file %s\n",istream89);
+                delay(10000);
+                exit(1);
+		}
+        while(fscanf(djiaf,"%f\n]",&c78[ref]) != EOF)
+		{
+		ref++;
+		nod=ref-1;
+		continue;
+		}
+	fclose(djiaf);
+	return(1);
+	}
+
+rd_coorprices78()
+	{
+	int ref=0;
+	datatype=1;
+        djiaf=fopen(istream90,"r");
+	if(djiaf == NULL)
+		{
+                printf("Can't open file %s\n",istream90);
+                delay(10000);
+                exit(1);
+		}
+        while(fscanf(djiaf,"%f\n]",&c79[ref]) != EOF)
+		{
+		ref++;
+		nod=ref-1;
+		continue;
+		}
+	fclose(djiaf);
+	return(1);
+	}
+
+rd_coorprices79()
+	{
+	int ref=0;
+	datatype=1;
+        djiaf=fopen(istream91,"r");
+	if(djiaf == NULL)
+		{
+                printf("Can't open file %s\n",istream91);
+                delay(10000);
+                exit(1);
+		}
+        while(fscanf(djiaf,"%f\n]",&c80[ref]) != EOF)
+		{
+		ref++;
+		nod=ref-1;
+		continue;
+		}
+	fclose(djiaf);
+	return(1);
+	}
+
+rd_coorprices80()
+	{
+	int ref=0;
+	datatype=1;
+        djiaf=fopen(istream92,"r");
+	if(djiaf == NULL)
+		{
+                printf("Can't open file %s\n",istream92);
+                delay(10000);
+                exit(1);
+		}
+        while(fscanf(djiaf,"%f\n]",&c81[ref]) != EOF)
+		{
+		ref++;
+		nod=ref-1;
+		continue;
+		}
+	fclose(djiaf);
+	return(1);
+	}
+
+rd_coorprices81()
+	{
+	int ref=0;
+	datatype=1;
+        djiaf=fopen(istream93,"r");
+	if(djiaf == NULL)
+		{
+                printf("Can't open file %s\n",istream93);
+                delay(10000);
+                exit(1);
+		}
+        while(fscanf(djiaf,"%f\n]",&c82[ref]) != EOF)
+		{
+		ref++;
+		nod=ref-1;
+		continue;
+		}
+	fclose(djiaf);
+	return(1);
+	}
+
+rd_coorprices82()
+	{
+	int ref=0;
+	datatype=1;
+        djiaf=fopen(istream94,"r");
+	if(djiaf == NULL)
+		{
+                printf("Can't open file %s\n",istream94);
+                delay(10000);
+                exit(1);
+		}
+        while(fscanf(djiaf,"%f\n]",&c83[ref]) != EOF)
+		{
+		ref++;
+		nod=ref-1;
+		continue;
+		}
+	fclose(djiaf);
+	return(1);
+	}
+
+rd_coorprices83()
+	{
+	int ref=0;
+	datatype=1;
+        djiaf=fopen(istream95,"r");
+	if(djiaf == NULL)
+		{
+                printf("Can't open file %s\n",istream95);
+                delay(10000);
+                exit(1);
+		}
+        while(fscanf(djiaf,"%f\n]",&c84[ref]) != EOF)
+		{
+		ref++;
+		nod=ref-1;
+		continue;
+		}
+	fclose(djiaf);
+	return(1);
+	}
+
+rd_coorprices84()
+	{
+	int ref=0;
+	datatype=1;
+        djiaf=fopen(istream96,"r");
+	if(djiaf == NULL)
+		{
+                printf("Can't open file %s\n",istream96);
+                delay(10000);
+                exit(1);
+		}
+        while(fscanf(djiaf,"%f\n]",&c85[ref]) != EOF)
+		{
+		ref++;
+		nod=ref-1;
+		continue;
+		}
+	fclose(djiaf);
+	return(1);
+	}
+
+rd_coorprices85()
+	{
+	int ref=0;
+	datatype=1;
+        djiaf=fopen(istream97,"r");
+	if(djiaf == NULL)
+		{
+                printf("Can't open file %s\n",istream97);
+                delay(10000);
+                exit(1);
+		}
+        while(fscanf(djiaf,"%f\n]",&c86[ref]) != EOF)
+		{
+		ref++;
+		nod=ref-1;
+		continue;
+		}
+	fclose(djiaf);
+	return(1);
+	}
+
+rd_coorprices86()
+	{
+	int ref=0;
+	datatype=1;
+        djiaf=fopen(istream98,"r");
+	if(djiaf == NULL)
+		{
+                printf("Can't open file %s\n",istream98);
+                delay(10000);
+                exit(1);
+		}
+        while(fscanf(djiaf,"%f\n]",&c87[ref]) != EOF)
+		{
+		ref++;
+		nod=ref-1;
+		continue;
+		}
+	fclose(djiaf);
+	return(1);
+	}
+
+rd_coorprices87()
+	{
+	int ref=0;
+	datatype=1;
+        djiaf=fopen(istream99,"r");
+	if(djiaf == NULL)
+		{
+                printf("Can't open file %s\n",istream99);
+                delay(10000);
+                exit(1);
+		}
+        while(fscanf(djiaf,"%f\n]",&c88[ref]) != EOF)
+		{
+		ref++;
+		nod=ref-1;
+		continue;
+		}
+	fclose(djiaf);
+	return(1);
+	}
+
+rd_coorprices88()
+	{
+	int ref=0;
+	datatype=1;
+        djiaf=fopen(istream100,"r");
+	if(djiaf == NULL)
+		{
+                printf("Can't open file %s\n",istream100);
+                delay(10000);
+                exit(1);
+		}
+        while(fscanf(djiaf,"%f\n]",&c89[ref]) != EOF)
+		{
+		ref++;
+		nod=ref-1;
+		continue;
+		}
+	fclose(djiaf);
+	return(1);
+	}
+
+rd_coorprices89()
+	{
+	int ref=0;
+	datatype=1;
+        djiaf=fopen(istream101,"r");
+	if(djiaf == NULL)
+		{
+                printf("Can't open file %s\n",istream101);
+                delay(10000);
+                exit(1);
+		}
+        while(fscanf(djiaf,"%f\n]",&c90[ref]) != EOF)
+		{
+		ref++;
+		nod=ref-1;
+		continue;
+		}
+	fclose(djiaf);
+	return(1);
+	}
+
+rd_coorprices90()
+	{
+	int ref=0;
+	datatype=1;
+        djiaf=fopen(istream102,"r");
+	if(djiaf == NULL)
+		{
+                printf("Can't open file %s\n",istream102);
+                delay(10000);
+                exit(1);
+		}
+        while(fscanf(djiaf,"%f\n]",&c91[ref]) != EOF)
+		{
+		ref++;
+		nod=ref-1;
+		continue;
+		}
+	fclose(djiaf);
+	return(1);
+	}
+
+rd_coorprices91()
+	{
+	int ref=0;
+	datatype=1;
+        djiaf=fopen(istream103,"r");
+	if(djiaf == NULL)
+		{
+                printf("Can't open file %s\n",istream103);
+                delay(10000);
+                exit(1);
+		}
+        while(fscanf(djiaf,"%f\n]",&c92[ref]) != EOF)
+		{
+		ref++;
+		nod=ref-1;
+		continue;
+		}
+	fclose(djiaf);
+	return(1);
+	}
+
+rd_coorprices92()
+	{
+	int ref=0;
+	datatype=1;
+        djiaf=fopen(istream104,"r");
+	if(djiaf == NULL)
+		{
+                printf("Can't open file %s\n",istream104);
+                delay(10000);
+                exit(1);
+		}
+        while(fscanf(djiaf,"%f\n]",&c93[ref]) != EOF)
+		{
+		ref++;
+		nod=ref-1;
+		continue;
+		}
+	fclose(djiaf);
+	return(1);
+	}
+
+rd_coorprices93()
+	{
+	int ref=0;
+	datatype=1;
+        djiaf=fopen(istream105,"r");
+	if(djiaf == NULL)
+		{
+                printf("Can't open file %s\n",istream105);
+                delay(10000);
+                exit(1);
+		}
+        while(fscanf(djiaf,"%f\n]",&c94[ref]) != EOF)
+		{
+		ref++;
+		nod=ref-1;
+		continue;
+		}
+	fclose(djiaf);
+	return(1);
+	}
+
+rd_coorprices94()
+	{
+	int ref=0;
+	datatype=1;
+        djiaf=fopen(istream106,"r");
+	if(djiaf == NULL)
+		{
+                printf("Can't open file %s\n",istream106);
+                delay(10000);
+                exit(1);
+		}
+        while(fscanf(djiaf,"%f\n]",&c95[ref]) != EOF)
+		{
+		ref++;
+		nod=ref-1;
+		continue;
+		}
+	fclose(djiaf);
+	return(1);
+	}
+
+rd_coorprices95()
+	{
+	int ref=0;
+	datatype=1;
+        djiaf=fopen(istream107,"r");
+	if(djiaf == NULL)
+		{
+                printf("Can't open file %s\n",istream107);
+                delay(10000);
+                exit(1);
+		}
+        while(fscanf(djiaf,"%f\n]",&c96[ref]) != EOF)
+		{
+		ref++;
+		nod=ref-1;
+		continue;
+		}
+	fclose(djiaf);
+	return(1);
+	}
+
+
+rd_coorprices96()
+	{
+	int ref=0;
+	datatype=1;
+        djiaf=fopen(istream108,"r");
+	if(djiaf == NULL)
+		{
+                printf("Can't open file %s\n",istream108);
+                delay(10000);
+                exit(1);
+		}
+        while(fscanf(djiaf,"%f\n]",&c97[ref]) != EOF)
+		{
+		ref++;
+		nod=ref-1;
+		continue;
+		}
+	fclose(djiaf);
+	return(1);
+	}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+menu()
+	{
+	char string[81];
+	clrscr();
+	printf("\n\n\n\n\n");
+        printf("                                  BAYES96X.EXE\n");
+        printf("                                 Copyright 2021\n");
+        printf("                                   C. Wendling \n\n\n");
+	printf("                                  MENU\n\n");
+	printf("                      <R>un Simulations\n");  
+	printf("                      <L>ist Command Line Parameters\n");
+	printf("                      <X>it to DOS\n\n");
+	printf("                                 Enter ONE option: ");
+        printf("\n\n\nThe command: BAYES96X \\path\\*.map \\path\\*.lot outputs a single stream .lot file.\n");
+	gets(string);
+	switch(string[0])
+		{
+		case'g':
+		case'G':
+				rd_prices();
+				break;
+		case'l':
+		case'L':
+				clrscr();
+				printf("This program can be run with command line parameters\n");
+				printf("to automatically produce  *.lot files, or manually make *.map files.\n\n");
+				printf("In the examples, each parameter must be separated from the next with\n");
+				printf("a space.\n\n");
+                                printf("The command line format for evolving .map files is:\n");
+                                                        printf("<BAYES96X> <Configuration File, see SP1.CFG file for example>\n\n");
+				printf("The format for automatically outputing  a single *.lot file stream is:\n"); 
+                                                        printf("<BAYES96X> <*.map infile> <*.lot outfile>\n\n");
+				printf("The format for outputing multiple *.lot files is:\n");
+                                                        printf("<BAYES96X> <tasklist.tsk> <1> <1>\n");
+                                printf("Where a typical .tsk file would have multiple lines like: \\pr\\m\\sp1.map \\pr\\l2\\sp1.lot\n\n");
+                                printf("The format for outputing a single *.prd file is:\n");
+                                                        printf("<BAYES96X> <*.map infile> <*.prd outfile> <1> <1> <1>\n");
+                                printf("The format for outputing multiple *.prd files is:\n");
+                                                        printf("<BAYES96X> <prdtasklist.tsk> <1> <1> <1> <1> <1>\n");
+
+				printf("Enter returns to main menu...\n");
+				getch();
+				break;
+		case'a':
+		case'A':
+				rd_coorprices1();
+				break;
+		case'b':
+		case'B':
+				rd_coorprices2();
+				break;
+		case'c':
+		case'C':
+				rd_coorprices3();
+				break;
+		case'd':
+		case'D':
+				rd_coorprices4();
+				break;
+		case'r':
+		case'R':
+				for(;;)
+					simmenu();
+				break;
+		case'x':
+		case'X':
+				clrscr();
+				exit(1);
+		case'p':
+		case'P':
+				pr=fopen("PRN","w");
+				if(pr == 0)
+					{
+					printf("Can't open printer\n");
+					delay(1000);
+					break;
+					}
+                                fprintf(pr,"              BAYES96X.EXE\n");
+				fprintf(pr,"Primary price stream file name(ohlc format): %s\n",istream1);
+				fprintf(pr,"2nd Price stream file name: %s\n",istream2);
+				fprintf(pr,"3rd Price stream file name: %s\n",istream3);
+				fprintf(pr,"4th Price stream file name: %s\n",istream4);
+				fprintf(pr,"5th Price stream file name: %s\n",istream5);
+				fprintf(pr,"Primary .PRD  stream file name: %s\n",prdstream);
+				fprintf(pr,"Secondary .PRD  stream file name: %s\n",prdstream2);
+				fprintf(pr,"Primary Long threshold percent ........... %f\n",longthresh*100.0);
+				fprintf(pr,"Secondary Long threshold percent.......... %f\n",longthresh2*100.0);
+				fprintf(pr,"Primary Short threshold percent........... %f\n",shortthresh*100.0);
+				fprintf(pr,"Secondary Short threshold percent......... %f\n",shortthresh2*100.0);
+				fprintf(pr,"Max Holding days(long).................... %d\n",maxhold);
+				fprintf(pr,"Max Holding days(short)................... %d\n",smaxhold);
+				fprintf(pr,"Lots per trade............................ %d\n",lotspertrade);
+				fprintf(pr,"Maximum lots allowed ..................... %d\n",maxlots);
+				fprintf(pr,"Stop threshold (points)................... %f\n",stopthresh);
+				fprintf(pr,"Re-enter threshold (points)............... %f\n",rthresh);
+				fprintf(pr,"Slippage per round-turn (points).......... %f\n",slippage);
+				fprintf(pr,"Forecast to target scale factor .......... %f\n",fsf);
+				fprintf(pr,"Simulation start (ref day#) .............. %d\n",simstart);
+				fprintf(pr,"Simulation stop  (ref day#) .............. %d\n",simstop);
+				fprintf(pr,"Trailing stop toggle 1=on, 0=off.......... %d\n",trailing);
+				fprintf(pr,"Spreads;  0=allowed, 1=prevent............ %d\n\n\n\n",nospreadflag);
+				fprintf(pr,"Number of lots put on (new & re-entries)= %ld\n",kount);
+				fprintf(pr,"Number of lots that hit target = %d\n",numhittarget);
+				fprintf(pr,"Number of open lots that timed-out profitably = %d\n",numexpprofit);
+				fprintf(pr,"Number of open lots that timed-out at a loss  = %d\n",numexploss);
+				fprintf(pr,"Number of stop-loss hits = %d\n",numstopped);
+				fprintf(pr,"Number of re-entries from stopped-out = %d\n",numreentered);
+				fprintf(pr,"Number of stopped lots that timed-out = %d\n",numstopsexp);
+				fprintf(pr,"Max 20 day draw-down(points)= %d\n",mdd20);
+				fprintf(pr,"Max 60 day draw-down(points)= %d\n",mdd60);
+				fprintf(pr,"Max 120 day draw-down(points)= %d\n",mdd120);
+				fprintf(pr,"Max 250 day draw-down(points)= %d\n",mdd250);
+				fprintf(pr,"Max re-entries allowed= %d\n",maxreentry);
+				if(kount!=0)
+					fprintf(pr,"Average dwell= %3.2f days\n",sumdaysold/kount);
+				fprintf(pr,"Total market points gain = %f\n",account[simstop-1]);
+				if(kount!=0)
+					fprintf(pr,"Mean points gain per lot = %f\n",account[simstop-1]/kount);
+				if(mdd250 < 0)
+					fprintf(pr,"Ave annual return = %f\n",avemonthlygain*12.0);
+				fprintf(pr,"Ave monthly gain points = %f\n\n\n\n",avemonthlygain);
+				fclose(pr);
+				break;
+		case'i':
+		case'I':
+				input_prd();
+				break;
+		case'f':
+		case'F':
+				input_prd2();
+				break;
+		
+		}
+	return(1);
+	}
+
+
+
+
+mk_box()
+	{
+	int xmax=639,ymax=479;
+	int x=0,y=0;
+	color=1;
+	_setcolor(color);
+	_moveto(0,0);
+	_lineto(xmax,y);
+	_lineto(xmax,ymax);
+	_lineto(x,ymax);
+	_lineto(x,y);
+	_moveto(x+2,y+2);
+	_lineto(xmax-2,y+2);
+	_lineto(xmax-2,ymax-2);
+	_lineto(x+2,ymax-2);
+	_lineto(x+2,y+2);
+	return(1);
+	}
+
+optmenu()
+	{
+	char ch='r';
+	char string[81];
+	int brkflag=0;
+        int x,ref,y,n;
+	int flag;
+	int genenum;
+	int loops;
+	int firstime,contflag;
+        float sum;
+	clrscr();
+	printf("\n");
+	printf("                         OPTIMIZATION MENU\n\n\n");
+//	printf("                      <E>volve best map parameters\n");
+//	printf("                      <F>itness type reset\n");
+//	printf("                      <B>uild map manually\n");
+//	printf("                      <A>djust mutation rate\n");
+//	printf("                      <C>alculate .prd stream\n");
+//	printf("                      <D>ays for graph performance bands\n");
+//	printf("                      <I>nput population file: *.pop\n");
+//	printf("                      <O>utput populataion file: *.pop\n");
+//	printf("                      <Z> write realized and unrealized equity stream\n");
+	printf("                      <R>ead map\n");
+        printf("                      <M>ap write\n");
+	printf("                      <W>rite .prd stream\n");
+	printf("                      <H>idden data view toggle\n");
+	printf("                      <P>lot map\n");
+	printf("                      <L>ist evolution parameters\n");
+	printf("                      <V>iew trade and .prd details\n");
+	printf("                      <S>et scale for viewing return stream\n");
+	printf("                      <D>isplay return stream with Buy&Hold stream\n");
+	printf("                     <X> Return to Simulation menu\n");
+	printf("                            Enter ONE option: ");
+	gets(string);
+	switch(string[0])
+		{
+		case'x':
+		case'X':
+				for(;;)
+				  simmenu();
+				break;
+		case's':
+		case'S':
+				clrscr();
+				printf("\n\n\n\n\n\tEnter graphics scale for return stream plot: ");
+				gets(string);
+				grss=atof(string);
+				break;
+		case'o':
+		case'O':
+				write_pop();
+				break;
+		case'z':
+		case'Z':
+				write_randu();
+				break;
+		case'f':
+		case'F':
+				clrscr();
+				printf("\tEnter code for fitness type:\n");
+				printf("\t1 = Sterling (ie, returns / max drawdown).\n");
+				printf("\t2 = Wendling/Hoppe (ie, returns / rms drawdowns).\n");
+				printf("\t3 = Returns/variance.\n");
+				printf("           Choice:  ");
+				gets(string);
+				fittype=atoi(string);
+				break;
+
+		case'a':
+		case'A':
+				clrscr();
+				printf("   Enter mutation rate (1 in 1000 as .001, etc.; 1.0=default): ");
+				gets(string);
+				mutrate=atof(string);
+				break;
+		case'l':
+		case'L':
+				clrscr();
+				printf("      EVOLUTION CONTROL PARAMETERS\n");
+				printf("Trader type: 1=long 2=short 3=both: %d\n",tradertype);
+				printf("Test data (days): %d\n",virg);
+				printf("Evolution optimization days: %d\n",evoptdays);
+				printf("Random number generator seed: %d\n",seed);
+				printf("Maximum map building passes: %d\n",gcmaxpass);
+				printf("Maximum days to hold a long position open: %d\n",gcmaxhold);
+				printf("Maximum days to hold a short position open: %d\n",gcsmaxhold);
+				printf("Maximum forecast (.prd) scale factor: %f\n",gcfsf);
+				printf("Maximum stop threshold (pts): %f\n",gcstopthresh);
+				printf("Minimum stop threshold (pts): %f\n",minstopthresh);
+				printf("Maximum reenter threshold (pts): %f\n",gcrthresh);
+				printf("Maximum lots per trade: %d\n",gclotspertrade);
+				printf("Maximum lots allowed open: %d\n",gcmaxlots);
+				printf("Maximum reentries allowed from stopped position: %d\n",gcmaxreentry-1);
+                                printf("purity thresh %f\n",puritythresh);
+				printf("offset 2 = %d\n",f2);
+				printf("offset 3 = %d\n",f3);
+				printf("offset 4 = %d\n",f4);
+				printf("future look = %d\n",flook);
+				printf("Maximum map price scale: %d\n",gcmapscale);
+				printf("Fitness type: 1=Sterling,2=W/H,3=Ret/Variance,4=returns:     %d\n",fittype);
+				printf("Target type: 1=nth day, 2=minmax              %d\n",targtype);
+				printf("Minimum lots traded before penalty applied to fitness: %f\n",mltq);
+                                printf("Forecasted price: %s\n  ",istream1);
+                                printf("<A> price stream: %s\n  ",istream2);
+				printf("<B> price stream: %s\n  ",istream3);
+				printf("<C> price stream: %s\n  ",istream4);
+				printf("<D> price stream: %s\n  ",istream5);
+				printf("<E> price stream: %s\n  ",istream6);
+				printf("<F> price stream: %s\n  ",istream7);
+				printf("<G> price stream: %s\n  ",istream8);
+				printf("<H> price stream: %s\n  ",istream9);
+				printf("<ENTER> returns...");
+				gets(string);
+				break;
+		
+		case'i':
+		case'I':
+				clrscr();
+				printf("System will build map, update .prd, & load trade parameters\n");
+				printf("for citizen selected.\n");
+				printf("You can then run the simulator for detailed results and tweeking.\n");
+                                printf("Enter SS number of citizen to instantiate(0-499): ");
+				gets(string);
+				competitor_ss=atoi(string);
+				input_pop();
+				printf("\nPlease wait, building map & .prd....\n\n");
+				printf("\n");
+				init_map();
+				calc_params_competitor();
+				build_map();
+                                fix_maps();
+				for(ref=250;ref<=nod;ref++)
+					c_perfn(ref);
+				normalize();
+				break;
+		case'm':
+		case'M':
+				write_map();
+				break;
+		case'd':
+		case'D':
+				_setvideomode(_VRES16COLOR);
+				mk_box();
+				draw_grid();
+				plot_buyandhold();
+                                plot_account();
+                           //     p_thrutime();
+                           //     p_ooscorr();
+                           //     draw_oosgrid();
+				gets(string);
+                                _setvideomode(_DEFAULTMODE);
+				break;
+		case'r':
+		case'R':
+				read_map();
+				simmenu();
+				break;
+		case'w':
+		case'W':
+				wrtpred();
+				break;
+		case'c':
+		case'C':
+				for(ref=250;ref<=nod;ref++)
+					c_perfn(ref);
+				normalize();
+				break;
+		
+		case'h':
+		case'H':
+				hidetoggle*=-1;
+				break;
+		case'v':
+		case'V':
+				_setvideomode(_VRES16COLOR);
+				mk_box();
+				draw_grid();
+				p_s();
+				p_pred();
+				p_actual();
+				draw_cursline();
+                           //     p_thrutime();
+                           //     p_ooscorr();
+                           //     draw_oosgrid();
+				xr.w.ax=0;
+				int386(0x33,&xr,&xr);  /* init mouse */
+				for(;;)
+					{
+					xr.w.ax=1;
+					int386(0x33,&xr,&xr);  /* show cursor */
+					xr.w.ax=3;
+					int386(0x33,&xr,&xr);  /* gets button status */
+					if(xr.w.bx == 1)   /* left button hit */
+						{
+						xcurs=xr.w.cx;
+						ycurs=xr.w.dx;
+						if(ycurs > 35 && ycurs < 70 && xcurs > 550) /* list */
+							{
+                            _setvideomode(_DEFAULTMODE);
+							clrscr();
+							for(x=20;x>=0;x--)
+								{
+								printf("Close = %5.2f    Forecast = %2.3f%%  Target=%5.2f  %d days ago\n"\
+					,c[nod-x-hs],pred[nod-x-hs],c[nod-x-hs]*(1.0+(pred[nod-x-hs]/100.0)),x+hs);
+								}
+							printf("Last price shown is furthest right on graphics screen.\n");
+							printf("Hit mouse button to return.\n");
+							for(;;)
+								{
+								int386(0x33,&xr,&xr);
+								if(xr.w.bx == 1)   /* button hit */
+									{
+									ycurs=50;
+									xcurs=400;
+									_setvideomode(_VRES16COLOR);
+									_clearscreen(_GCLEARSCREEN);
+									break;
+									}
+								if(kbhit())
+									break;
+								}
+							}
+						if(ycurs >70 && ycurs < 100 && xcurs > 500) /* map */
+							{
+							_clearscreen(_GCLEARSCREEN);
+							mk_box();
+							draw_it();
+							_settextposition(2,2);
+							_outtext("Click mouse to return..");
+							for(;;)
+								{
+								int386(0x33,&xr,&xr);
+								if(xr.w.bx == 1)   /* button hit */
+									{
+									ycurs=50;
+									xcurs=400;
+									_clearscreen(_GCLEARSCREEN);
+									break;
+									}
+								if(kbhit())
+									break;
+								}
+							}
+						if(ycurs > 40 && ycurs < 60 && xcurs < 550) /* pan */
+							{
+							_clearscreen(_GCLEARSCREEN);
+							hs-=xcurs-400;
+							if(hs < 0)
+								{
+								hs=0;
+								}
+							if(hs > nod-310)
+								{
+								hs=nod-310;
+								}
+							mk_box();
+							draw_grid();
+							p_s();
+							p_pred();
+							p_actual();
+							draw_cursline();
+							}
+						if(xcurs >550 && ycurs <35)  /* curs menu */
+							break;
+						}
+					if(kbhit())  /* keypad menu */
+						{
+						ch=getchar();
+						break;
+						}
+					}
+				_setvideomode(_DEFAULTMODE);
+				break;
+	
+		case'p':
+		case'P':
+				clrscr();
+				printf("Enter height scale(for viewing AND subsequent calc's): ");
+				gets(string);
+				htscale=atof(string);
+				count_weights();
+
+				_setvideomode(_VRES16COLOR);
+				mk_box();
+				draw_it();
+				
+				for(;;)
+					{
+					if(kbhit())
+						{
+						ch=getch();
+						break;
+						}
+					}
+                _setvideomode(_DEFAULTMODE);
+				break;
+		}
+	return(1);
+	}
+
+
+c_prdcontained()
+    {
+    int ref,x;
+    float max,min,upper,lower;
+    float inside=0.0;
+    float count=0.0;
+    for(ref=250;ref<(nod-((virg+foldshift)+hide));ref++)
+        {
+        count=count+1.0;
+        max=0.0;
+        min=100000.0;
+        for(x=1;x<30;x++)
+            {
+            if(c[ref+x] > max)
+                max=c[ref+x];
+            if(c[ref+x] < min)
+                min=c[ref+x];
+            }
+         upper=(max/c[ref]-1.0)*100.0;
+         lower=(min/c[ref]-1.0)*100.0;
+         if(pred[ref] <= upper && pred[ref] >= lower)
+            inside=inside+1.0;
+         }
+    proportion_contained=inside/count;
+    return(1);
+    }
+
+
+
+
+
+
+
+draw_cursline()
+	{
+	color=12;
+	_setcolor(color);
+	_moveto(353,53);
+	_lineto(447,47);
+	_moveto(353,47);
+	_lineto(447,53);
+	_moveto(400,45);
+	_lineto(400,55);
+	_moveto(350,50);
+	_lineto(355,55);
+	_moveto(350,50);
+	_lineto(355,45);
+	_moveto(450,50);
+	_lineto(445,55);
+	_moveto(450,50);
+	_lineto(445,45);
+	return(1);
+	}
+
+init_avelyeq()
+	{
+	int x;
+	for(x=0;x<1500;x++)
+		{
+		avelyeq[x]=0.0;
+		favelyeq[x]=0.0;
+		}
+	return(1);
+	}
+
+
+
+init_avegenfit()
+	{
+	int x;
+	for(x=0;x<500;x++)
+		avegenfit[x]=0.0;
+	return(1);
+	}
+
+
+
+
+
+update()
+	{
+	int ref;
+	decode_bestoos();
+	init_map();
+        for(fold=1;fold<=10;fold++)
+		{
+		init_map();
+                foldwidth=learn/9;
+		foldshift=foldwidth*(fold-1);
+	//	if(foldshift > (learn-250))
+	//		foldshift=learn-250;
+		build_map();
+                fix_maps();
+		for(ref=250;ref<=nod;ref++)
+			 c_perfn(ref);
+		normalize();
+		}
+	return(1);
+	}
+
+simmenu()
+	{
+	int x;
+	char ch;
+	char string[81];
+	clrscr();
+	printf("                             SIMULATION MENU\n\n");
+	printf("                       <N> Optimization Menu\n");
+	printf("                       <B> Set buy (open long) threshold\n");
+	printf("                       <M> Set maximum holding period\n");
+ 	printf("                       <S> Set sell (open short) threshold\n");
+ 	printf("                       <W> Set .prd scale for target prices\n");
+ //	printf("                       <C> Set maximum lots allowed open\n");
+ //	printf("                       <G> Set lots per trade\n");
+ 	printf("                       <K> Set slippage\n");
+ 	printf("                       <Y> Set Trader type (long/short/both)\n"); 
+ //	printf("                       <A> Set simulation start 'date'\n");
+ //	printf("                       <Z> Set simulation stop 'date'\n");
+	printf("                       <L> List parameter settings\n");
+	printf("                       <R> Run Simulation\n");
+	printf("                       <H> ide toggle ability to see hidden data\n");
+	printf("                       <V> View price stream, forecast, & trade markers\n");
+	printf("                       <D> Draw Account balance change distribution\n");
+	printf("                       <F> Draw trade results distribution\n");
+	printf("                       <J> Jump to day in past for view\n");
+	printf("                       <E> Enable Audit trail to disk\n");
+	printf("                       <O> Output Mkt. pts. won/lost stream to file\n");
+	printf("                       <8> Set entry type flag (close or next days open)\n");
+ //	printf("                      <X> Return to Main menu\n");
+	printf("                           Enter one option: ");
+	gets(string);
+	switch(string[0])
+		{
+		case'n':
+		case'N':
+				for(;;)
+					optmenu();
+				break;
+      case'8':
+				clrscr();
+				printf("Enter 1 to enter trade on closing price associated with .prd\n");
+				printf(" or enter 0 to enter trade on the next day's opening price: ");
+				gets(string);
+				entrytypeflag=atoi(string);
+				break;
+		case'p':
+		case'P':
+				clrscr();
+				printf("Enter maximum number of re-entries allowed: ");
+				gets(string);
+				maxreentry=atoi(string);
+				break;
+		case'1':
+				clrscr();
+				printf("When dynamic targets is turned on, all open long positions\n");
+				printf("will be terminated at the close if either primary or secondary\n");
+				printf(".prd's turn negative. Likewise, any open shorts will be offset\n");
+				printf("if either .prd flips to positive.\n");
+				printf("With dynamic targets off, positions must hit original targets,\n");
+				printf("time-out, or hit a protective stop to be terminated.\n");
+				printf("Enter '1' to turn dynamic targets on, '0' for off: ");
+				gets(string);
+				dynamicflag=atoi(string);
+				break;
+		case'y':
+		case'Y':
+				clrscr();
+				printf("Enter trader type (1 for long, 2 for short, 3 for both): ");
+				gets(string);
+				tradertype=atoi(string);
+				break;
+		case'B':
+		case'b':
+				clrscr();
+				printf("Enter 'open primary long position' threshold (percent):  \n");
+				gets(string);
+				longthresh=atof(string)/100.0;
+		//		printf("Enter 'open secondary long position' threshold (percent):  \n");
+		//		gets(string);
+		//		longthresh2=atof(string)/100.0;
+				break;
+		case'H':
+		case'h':
+				hidetoggle*=-1;
+				break;
+
+
+
+
+		 
+		case'i':
+		case'I':
+				clrscr();
+				printf("Enter 're-entrant' threshold.\n");
+				printf("Note: use points away from stopped price: ");
+				gets(string);
+				rthresh=atof(string);
+				break;
+		case'K':
+		case'k':
+				clrscr();
+				printf("Enter slippage (market points) per round turn.\n");
+				gets(string);
+				slippage=atof(string);
+				break;
+		case'e':
+		case'E':
+				clrscr();
+				eq=0;
+				printf("Enter 0=no detail, 1=detail to file:'audit.trl'.\n");
+				printf("2= output equity stream to file.\n");
+				gets(string);
+				d=atoi(string);
+				if(d == 2)
+					{
+					d=0;
+					eq=1;
+					}
+				break;
+		case'f':
+		case'F':
+				drawtradedist();
+				break;
+		case't':
+		case'T':
+				clrscr();
+				printf("Enter 0 for static stops, 1 for 'trailing' stops: ");
+				gets(string);
+				trailing=atoi(string);
+				break;
+		case'q':
+		case'Q':
+				clrscr();
+				printf("Enter 0 to allow Spread positions, 1 to prevent: ");
+				gets(string);
+				nospreadflag=atoi(string);
+				break;
+		case'w':
+		case'W':
+				clrscr();
+				printf("Enter scale factor on forecast for target calculation.\n");
+				printf("Terminates position at target price. ");
+				gets(string);
+				fsf=atof(string);
+				break;
+		case'c':
+		case'C':
+				clrscr();
+				printf("Enter most lots allowed open at any time(150 max): ");
+				gets(string);
+				maxlots=atoi(string);
+				break;
+		case'm':
+		case'M':
+				clrscr();
+				printf("Enter maximum days to hold long position before closing trade: ");
+				gets(string);
+				gcmaxhold=atoi(string);
+				maxhold=gcmaxhold;
+				printf("Enter maximum days to hold short position before closing trade: ");
+				gets(string);
+				gcsmaxhold=atoi(string);
+				smaxhold=gcsmaxhold;
+				break;
+		case's':
+		case'S':
+				clrscr();
+				printf("Enter 'open primary short position' threshold (percent): \n");
+				gets(string);
+				shortthresh=atof(string)/100.0;
+		//		printf("Enter 'open secondary short position' threshold (percent): \n");
+		//		gets(string);
+		//		shortthresh2=atof(string)/100.0;
+				break;
+		case'g':
+		case'G':
+				clrscr();
+				printf("Enter lots per trade.\n");
+				printf("Not to exceed %d maximum lots allowed.\n",maxlots);
+				printf("Remainder lots will be put on if not evenly divisible.\n");
+				printf("                        : ");
+				gets(string);
+				lotspertrade=atoi(string);
+				break;
+		case'a':
+		case'A':
+				clrscr();
+				printf("Number of days in file = %d.\n",nod);
+				printf("Enter simulation start ref day#: ");
+				gets(string);
+				simstart=atoi(string);
+				break;
+		case'z':
+		case'Z':
+				clrscr();
+				printf("Number of days in file = %d.\n",nod);
+				printf("Enter simulation stop ref day#: ");
+				gets(string);
+				simstop=atoi(string);
+				break;
+		case'l':
+		case'L':
+				clrscr();
+				printf("\n\n\n\n\n\n\n\n");
+				printf("Primary Long threshold percent ........... %f\n",longthresh*100.0);
+				printf("Secondary Long threshold percent ......... %f\n",longthresh2*100.0);
+				printf("Primary Short threshold percent........... %f\n",shortthresh*100.0);
+				printf("Secondary Short threshold percent......... %f\n",shortthresh2*100.0);
+				printf("Max Holding days (long)................... %d\n",maxhold);
+				printf("Max Holding days (short).................. %d\n",smaxhold);
+				printf("Future look days.......................... %d\n",flook);
+				printf("Lots per trade............................ %d\n",lotspertrade);
+                                printf("Puritythresh.............................. %f\n",puritythresh);
+				printf("Maximum lots allowed ..................... %d\n",maxlots);
+				printf("Slippage per round-turn (market points)... %f\n",slippage);
+				printf("Forecast to target scale factor .......... %f\n",fsf);
+				printf("Simulation start (ref day#) .............. %d\n",simstart);
+				printf("Simulation stop  (ref day#) .............. %d\n",simstop);
+                                printf("Spreads;  0=allowed, 1=prevent............ %d\n",nospreadflag);
+				printf("Trader type (1=long,2=short,3=both)....... %d\n",tradertype);
+				printf("Target type: 1=nth day, 2=minmax.......... %d\n",targtype);
+                                printf("Entry type flag: 1=close, 0=open.......... %d\n",entrytypeflag);
+                                printf("Fitness type(1=Sterling, 2=W/H, 3=R/V).... %d\n\n",fittype);
+				printf("       <Enter> returns...");
+				gets(string);
+				if(cbmf) run_batch();
+				break;
+		case'r':
+		case'R':
+				oflag=0;
+				grtoggle=1;
+                initflag=0;
+				clrscr();
+				simstrat();
+				if(cbmf) run_batch();
+				break;
+		case'v':
+		case'V':
+				_setvideomode(_VRES16COLOR);
+				mk_box();
+				draw_grid();
+				p_s();
+				p_pred();
+				p_actual();
+				draw_cursline();
+				xr.w.ax=0;
+				int386(0x33,&xr,&xr);  /* init mouse */
+				for(;;)
+					{
+					xr.w.ax=1;
+					int386(0x33,&xr,&xr);  /* show cursor */
+					xr.w.ax=3;
+					int386(0x33,&xr,&xr);  /* gets button status */
+					if(xr.w.bx == 1)   /* left button hit */
+						{
+						xcurs=xr.w.cx;
+						ycurs=xr.w.dx;
+						if(ycurs > 35 && ycurs < 70 && xcurs > 550) /* list */
+							{
+                            _setvideomode(_DEFAULTMODE);
+							clrscr();
+							for(x=20;x>=0;x--)
+								{
+								printf("Close = %5.2f    Forecast = %2.3f%%  Target=%5.2f  %d days ago\n"\
+					,c[nod-x-hs],pred[nod-x-hs],c[nod-x-hs]*(1.0+(pred[nod-x-hs]/100.0)),x+hs);
+								}
+							printf("Last price shown is furthest right on graphics screen.\n");
+							printf("Hit mouse button to return.\n");
+							for(;;)
+								{
+								int386(0x33,&xr,&xr);
+								if(xr.w.bx == 1)   /* button hit */
+									{
+									ycurs=50;
+									xcurs=400;
+									_setvideomode(_VRES16COLOR);
+									_clearscreen(_GCLEARSCREEN);
+									break;
+									}
+								if(kbhit())
+									break;
+								}
+							}
+						if(ycurs >70 && ycurs < 100 && xcurs > 500) /* map */
+							{
+							_clearscreen(_GCLEARSCREEN);
+							mk_box();
+							draw_it();
+							_settextposition(2,2);
+							_outtext("Click mouse to return..");
+							for(;;)
+								{
+								int386(0x33,&xr,&xr);
+								if(xr.w.bx == 1)   /* button hit */
+									{
+									ycurs=50;
+									xcurs=400;
+									_clearscreen(_GCLEARSCREEN);
+									break;
+									}
+								if(kbhit())
+									break;
+								}
+							}
+						if(ycurs > 40 && ycurs < 60 && xcurs < 550) /* pan */
+							{
+							_clearscreen(_GCLEARSCREEN);
+							hs-=xcurs-400;
+							if(hs < 0)
+								{
+								hs=0;
+								}
+							if(hs > nod-310)
+								{
+								hs=nod-310;
+								}
+							mk_box();
+							draw_grid();
+							p_s();
+							p_pred();
+							p_actual();
+                                                  //      p_ooscorr();
+							draw_cursline();
+							}
+						if(xcurs >550 && ycurs <35)  /* curs menu */
+							break;
+						}
+					if(kbhit())  /* keypad menu */
+						{
+						ch=getchar();
+						break;
+						}
+					}
+				_setvideomode(_DEFAULTMODE);
+            if(cbmf) run_batch();
+				break;
+		case'd':
+		case'D':
+				drawdist();
+				if(cbmf) run_batch();
+				break;
+		case'j':
+		case'J':
+					clrscr();
+					printf("\n\n\nEnter # of days to jump back in time for <V>iew: ");
+					gets(string);
+					hs=atoi(string);
+               if(cbmf) run_batch();
+					break;
+		case'o':
+		case'O':
+					wrtmktpts();
+					if(cbmf) run_batch();
+					break;
+		case'x':
+		case'X':
+				for(;;)
+					menu();
+		}
+	return(1);
+	}
+
+
+simstrat()
+	{
+	char string[30];
+	long ref,x,k;
+        float i1,i2;
+	int z;
+	int longcount,shortcount,ans;
+        int genenum;
+	kount=0;   // total lots traded over simulation
+	numlotsactive=0;  // number of open positions at any time
+	numhittarget=0;
+	numexpprofit=0;
+	numexploss=0;
+	numstopsexp=0;
+	numstopped=0;
+	numreentered=0;
+	numlotsnostop=0;
+	cab=0.0;   // cash account balance
+	sumdaysold=0.0;
+	mcount=0;   // month count
+	summonthlygain=0.0;
+	sumdiffsqrd=0.0;
+	lotcount=0;
+	if(datatype == 0)
+		{
+		printf("Can't run simulator on close only data.\n");
+		printf("You must use O,H,L,C format, or .prn files.\n");
+		//delay(2000);
+		return(1);
+		}
+        if(dumptoggle)   // if dumptoggle == 1 or 2, open files pointer
+		{
+		du=fopen(istream11,"w");
+		}
+   if(grtoggle ==1 )
+        {
+        _setvideomode(_VRES16COLOR);
+        mk_box();
+        draw_cgrid();
+        }
+	if(eq)
+		{
+		system("dir *.equ");
+		printf("Enter file name for equity stream: ");
+		gets(string);
+		equ=fopen(string,"w");
+		}
+	if(d)
+		{
+		pr=fopen("audit.trl","w");
+		fprintf(pr,"Primary Long threshold percent ........... %f\n",longthresh*100.0);
+		fprintf(pr,"Secondary Long threshold percent.......... %f\n",longthresh2*100.0);
+		fprintf(pr,"Primary Short threshold percent........... %f\n",shortthresh*100.0);
+		fprintf(pr,"Secondary Short threshold percent......... %f\n",shortthresh2*100.0);
+		fprintf(pr,"Max Holding days (long)................... %d\n",maxhold);
+		fprintf(pr,"Max Holding days (short).................. %d\n",smaxhold);
+		fprintf(pr,"Lots per trade............................ %d\n",lotspertrade);
+		fprintf(pr,"Maximum lots allowed ..................... %d\n",maxlots);
+		fprintf(pr,"Stop threshold points..................... %f\n",stopthresh);
+		fprintf(pr,"Re-enter threshold points................. %f\n",rthresh);
+		fprintf(pr,"Slippage per round-turn (market points)... %f\n",slippage);
+		fprintf(pr,"Forecast to target scale factor .......... %f\n",fsf);
+		fprintf(pr,"Simulation start (ref day#) .............. %d\n",simstart);
+		fprintf(pr,"Simulation stop  (ref day#) .............. %d\n",simstop);
+		fprintf(pr,"Trailing stop toggle 1=on, 0=off.......... %d\n",trailing);
+		fprintf(pr,"Spreads;  0=allowed, 1=prevent............ %d\n",nospreadflag);
+		fprintf(pr,"Dynamic target flag = %d\n",dynamicflag);
+		fprintf(pr,"Trader type;1=long,2=short,3=both......... %d\n",tradertype);
+		}
+	for(lotnum=0;lotnum<=maxlots;lotnum++)
+		{
+		lotstatus[lotnum]=0;  //initialize to available
+		lotentryprice[lotnum]=0.0;
+		lottarget[lotnum]=0.0;
+		lotrcount[lotnum]=0;
+		}
+	for(ref=0;ref<=nod;ref++)
+		{
+		openmarker[ref]=0;
+		closemarker[ref]=0;
+		stopmarker[ref]=0;
+		reentermarker[ref]=0;
+		}
+	for(ref=0;ref<MAXLINES;ref++)
+		{
+		account[ref]=0.0;
+		randu[ref]=0.0;
+		marketpts[ref]=0.0;
+		}
+	account[simstart-1]=cab;
+	oldaccount=cab;
+	longcount=0;
+	shortcount=0;
+	for(ref=simstart;ref<=simstop;ref++)
+		{
+		if(kbhit())
+			{
+			d=0;
+			eq=0;
+			}
+		if(d)
+			fprintf(pr,"************** ref=%d closing price = %5.2f\n",ref,c[ref]);
+		account[ref]=account[ref-1];//carryover yesterdays account balance
+		if((ref)%20 == 0) // every 20th day
+			{
+			++mcount;
+			monthlygain[mcount]=account[ref]-oldaccount;
+			oldaccount=account[ref];
+			}
+      /*  i2=0.0;
+        for(z=0;z<f3;z++)
+            {
+            i2+=pred2[ref-z];
+            }
+        i2=i2/(float)f3;
+        i1=0.0;
+        for(z=0;z<f3;z++)
+            {
+            i1+=pred[ref-z];
+            }
+		  i1=i1/(float)f3; */
+                i1=pred[ref];  
+		i2=pred2[ref];
+
+		// check  if any lots should be re-entered,stopped,hit target,or timed out.
+		for(lotnum=0;lotnum<maxlots;lotnum++)
+			{
+			if( lotstatus[lotnum] == 2 && c[ref] >= lotexitprice[lotnum]+rthresh && lotrcount[lotnum] < maxreentry )
+				{    // re-enter stopped-out long lot
+				lotrcount[lotnum] +=1;
+				lotstatus[lotnum] = 1;
+				lotentryprice[lotnum]=lotentryprice[lotnum]+rthresh;
+				maxcloseprice[lotnum]=lotentryprice[lotnum];
+				++kount;
+				reentermarker[ref]+=1;
+				++numreentered;
+				if(d)fprintf(pr,"reentered long lotnum%d @ %5.2f\n",lotnum+1,lotentryprice[lotnum]);
+				}
+			if( lotstatus[lotnum] == 3 && c[ref] <= lotexitprice[lotnum]-rthresh && lotrcount[lotnum] < maxreentry )
+				{    // re-enter stopped-out short lot
+				lotrcount[lotnum] +=1;
+				lotstatus[lotnum] = 1;
+				lotentryprice[lotnum]=lotexitprice[lotnum]-rthresh;
+				mincloseprice[lotnum]=lotentryprice[lotnum];
+				++kount;
+				reentermarker[ref]+=1;
+				++numreentered;
+				if(d)fprintf(pr,"reentered short lotnum%d @ %5.2f\n",lotnum+1,lotentryprice[lotnum]);
+				}
+			if( lotstatus[lotnum] == 1)  //active trade
+				{
+				if(tradetype[lotnum] == 1||tradetype[lotnum] == 2)  // long
+					{
+					if(trailing == 0)
+						maxcloseprice[lotnum]=lotentryprice[lotnum];
+					if(l[ref] < maxcloseprice[lotnum]-stopthresh)
+						{
+						lotstatus[lotnum]=2;  // stopped out long
+						lotexitprice[lotnum]=maxcloseprice[lotnum]-(stopthresh+slippage);
+						chg=lotexitprice[lotnum]-lotentryprice[lotnum];
+						lotcount=lotcount+1;
+						lotresult[lotcount]=chg;
+						account[ref]+=chg;
+						marketpts[ref]+=chg;
+						stopmarker[ref]+=1;
+						++numstopped;
+                                           //     p_corr(lotopenref[lotnum],chg,tradetype[lotnum]);
+						if(d)fprintf(pr,"stopped out long lotnum%d @ %5.2f\n",lotnum+1,lotexitprice[lotnum]);
+						if(d)fprintf(pr,"account=%9.2f\n",account[ref]);
+						}
+					if( c[ref] >= lottarget[lotnum])
+						{
+						lotstatus[lotnum]=0; // hit target long
+						lotrcount[lotnum]=0; // reset reentry count
+						account[ref]+=c[ref]-(lotentryprice[lotnum]+slippage);
+						lotcount=lotcount+1;
+						lotresult[lotcount]=c[ref]-(lotentryprice[lotnum]+slippage);
+						chg=lotresult[lotcount];
+						marketpts[ref]+=chg;
+						numlotsactive-=1;
+						closemarker[ref]+=1;
+						sumdaysold+=((ref)-lotopenref[lotnum]);
+						++numhittarget;
+						if(c[lotopenref[lotnum]] == lotentryprice[lotnum])
+							++numlotsnostop;
+                                          //      p_corr(lotopenref[lotnum],chg,tradetype[lotnum]);
+						if(d)fprintf(pr,"hit target long lotnum%d @ %5.2f\n",lotnum+1,lottarget[lotnum]);
+						if(d)fprintf(pr,"account=%9.2f\n",account[ref]);
+						}
+
+				  if( dynamicflag == 1 && (i2 < 0.0 || i1 < 0.0) && lotstatus[lotnum] != 0) // .prd flipped-dynamic
+						{
+						lotstatus[lotnum]=0; //  either .prd went negative on long position
+						lotrcount[lotnum]=0; // reset reentry count
+						account[ref]+=c[ref]-lotentryprice[lotnum];
+						lotcount=lotcount+1;
+						lotresult[lotcount]=c[ref]-lotentryprice[lotnum];
+						chg=lotresult[lotcount];
+						marketpts[ref]+=chg;
+						numlotsactive-=1;
+						closemarker[ref]+=1;
+						sumdaysold+=((ref)-lotopenref[lotnum]);
+						++numhittarget;
+						if(c[lotopenref[lotnum]] == lotentryprice[lotnum])
+							++numlotsnostop;
+                                           //     p_corr(lotopenref[lotnum],chg,tradetype[lotnum]);
+						if(d)fprintf(pr,".prd flipped/dynamic lotnum%d @ %5.2f\n",lotnum+1,c[ref]);
+						if(d)fprintf(pr,"account=%9.2fpoints\n",account[ref]);
+						}
+					if( lotopenref[lotnum] == (ref)-maxhold && lotstatus[lotnum] == 1) //time expired
+						{
+						lotstatus[lotnum]=0; // get-out of long -timed out
+						lotrcount[lotnum]=0;  // reset reentry count
+						account[ref]+=c[ref]-(lotentryprice[lotnum]+slippage);
+						lotcount=lotcount+1;
+						lotresult[lotcount]=c[ref]-(lotentryprice[lotnum]+slippage);
+						chg=lotresult[lotcount];
+						marketpts[ref]+=chg;
+						if(lotresult[lotcount] > 0.0)
+							++numexpprofit;
+						else
+							++numexploss;
+						numlotsactive-=1;
+						closemarker[ref]+=1;
+						sumdaysold+=((ref)-lotopenref[lotnum]);
+						if(c[lotopenref[lotnum]] == lotentryprice[lotnum])
+							++numlotsnostop;
+                                           //     p_corr(lotopenref[lotnum],chg,tradetype[lotnum]);
+						if(d)fprintf(pr,"timed out long lotnum%d @ %5.2f\n",lotnum+1,c[ref]);
+						if(d)fprintf(pr,"account=%9.2f\n",account[ref]);
+						}
+					}
+				if( tradetype[lotnum] ==-1||tradetype[lotnum]==-2) //short
+					{
+					if(trailing == 0)
+						mincloseprice[lotnum]=lotentryprice[lotnum];
+					if( h[ref] > mincloseprice[lotnum]+stopthresh) //stopped out short
+						{
+						lotstatus[lotnum]=3;  // stopped out short
+						lotexitprice[lotnum]=mincloseprice[lotnum]+stopthresh+slippage;
+						chg=lotentryprice[lotnum]-lotexitprice[lotnum];
+						lotcount=lotcount+1;
+						lotresult[lotcount]=chg;
+						account[ref]+=chg;
+						marketpts[ref]+=chg;
+						stopmarker[ref]+=1;
+						++numstopped;
+                                           //     p_corr(lotopenref[lotnum],-chg,tradetype[lotnum]);
+						if(d)fprintf(pr,"stopped out short lotnum%d @ %5.2f\n",lotnum+1,lotexitprice[lotnum]);
+						if(d)fprintf(pr,"account=%9.2f\n",account[ref]);
+						}
+					if( c[ref] <= lottarget[lotnum])
+						{
+						lotstatus[lotnum]=0;  // hit target short
+						lotrcount[lotnum]=0;  // reset reentry count
+						account[ref]+=lotentryprice[lotnum]-(c[ref]+slippage);
+						lotcount+=1;
+						lotresult[lotcount]=lotentryprice[lotnum]-(c[ref]+slippage);
+						chg=lotresult[lotcount];
+						marketpts[ref]+=chg;
+						numlotsactive-=1;
+						closemarker[ref]-=1;
+						sumdaysold+=((ref)-lotopenref[lotnum]);
+						++numhittarget;
+						if(c[lotopenref[lotnum]] == lotentryprice[lotnum])
+							++numlotsnostop;
+                                          //      p_corr(lotopenref[lotnum],-chg,tradetype[lotnum]);
+						if(d)fprintf(pr,"hit target short lotnum%d @ %5.2f\n",lotnum+1,lottarget[lotnum]);
+						if(d)fprintf(pr,"account=%9.2f\n",account[ref]);
+						}
+				  if( dynamicflag == 1 && (i2 > 0.0 || i1 > 0.0) && lotstatus[lotnum] != 0) // .prd flipped-dynamic
+						{
+						lotstatus[lotnum]=0;  // either .prd went positive on open short position
+						lotrcount[lotnum]=0;  // reset reentry count
+						account[ref]+=lotentryprice[lotnum]-c[ref];
+						lotcount+=1;
+						lotresult[lotcount]=lotentryprice[lotnum]-c[ref];
+						chg=lotresult[lotcount];
+						marketpts[ref]+=chg;
+						numlotsactive-=1;
+						closemarker[ref]-=1;
+						sumdaysold+=((ref)-lotopenref[lotnum]);
+						++numhittarget;
+						if(c[lotopenref[lotnum]] == lotentryprice[lotnum])
+							++numlotsnostop;
+                                          //      p_corr(lotopenref[lotnum],-chg,tradetype[lotnum]);
+						if(d)fprintf(pr,".prd flipped/dynamic lotnum%d @ %5.2f\n",lotnum+1,c[ref]);
+						if(d)fprintf(pr,"account=%9.2fpoints\n",account[ref]);
+						}
+					if( lotopenref[lotnum] == (ref)-smaxhold && lotstatus[lotnum] == 1) //time expired
+						{
+						lotstatus[lotnum]=0;  // close short, time expired
+						lotrcount[lotnum]=0;  //reset reentry count
+						account[ref]+=lotentryprice[lotnum]-(c[ref]+slippage);
+						lotcount+=1;
+						lotresult[lotcount]=lotentryprice[lotnum]-(c[ref]+slippage);
+						chg=lotresult[lotcount];
+						marketpts[ref]+=chg;
+						if(lotresult[lotcount] > 0.0)
+							++numexpprofit;
+						else
+							++numexploss;
+						numlotsactive-=1;
+						closemarker[ref]-=1;
+						sumdaysold+=((ref)-lotopenref[lotnum]);
+						if(c[lotopenref[lotnum]] == lotentryprice[lotnum])
+							++numlotsnostop;
+                                          //      p_corr(lotopenref[lotnum],-chg,tradetype[lotnum]);
+						if(d)fprintf(pr,"short timed out lotnum%d @ %5.2f\n",lotnum+1,c[ref]);
+						if(d)fprintf(pr,"account=%9.2f\n",account[ref]);
+						}
+					}
+				}
+			if(lotstatus[lotnum] == 2 )
+				{
+				if( lotopenref[lotnum] == (ref)-maxhold) //time expired on stopped lot
+					{
+					lotstatus[lotnum]=0;
+					lotrcount[lotnum]=0; // reset reentry count
+					++numstopsexp;
+					numlotsactive-=1;
+					if(d)fprintf(pr,"time expired on stopped lotnum%d\n",lotnum+1);
+					}
+				}
+			if(lotstatus[lotnum] == 3 )
+				{
+				if( lotopenref[lotnum] == (ref)-smaxhold) //time expired on stopped lot
+					{
+					lotstatus[lotnum]=0;
+					lotrcount[lotnum]=0; // reset reentry count
+					++numstopsexp;
+					numlotsactive-=1;
+					if(d)fprintf(pr,"time expired on stopped lotnum%d\n",lotnum+1);
+					}
+				}
+			if(trailing && lotstatus[lotnum])
+				{
+				if(tradetype[lotnum] ==1||tradetype[lotnum]==2)   //long
+					if(ref != nod && c[ref] > maxcloseprice[lotnum] && lotstatus[lotnum] != 2)
+						{
+						maxcloseprice[lotnum]=c[ref];
+						if(d)fprintf(pr,"raised stop on lotnum%d to %6.2f\n",lotnum+1,maxcloseprice[lotnum]-stopthresh);
+						}
+				}
+			if(trailing && lotstatus[lotnum])
+				{
+				if(tradetype[lotnum] ==-1||tradetype[lotnum]==-2)   //short
+					{
+					if(ref != nod && c[ref] < mincloseprice[lotnum] && lotstatus[lotnum] != 3)
+						{
+						mincloseprice[lotnum]=c[ref];
+						if(d)fprintf(pr,"lowered stop on lotnum%d to %6.2f\n",lotnum+1,mincloseprice[lotnum]+stopthresh);
+						}
+					}
+				}
+			}
+		longflag=0;
+		shortflag=0;
+		for(lotnum=0;lotnum<maxlots;lotnum++)
+			{
+			if(lotstatus[lotnum] == 1)  // ie open
+				{
+				if(tradetype[lotnum] == 1||tradetype[lotnum]==2)  // ie long
+					longflag=1;
+				if(tradetype[lotnum] == -1||tradetype[lotnum]==-2)  // ie short
+					shortflag=1;
+				}
+			}
+		openlotvalue=0.0;    //initialize open position points change
+		for(lotnum=0;lotnum<maxlots;lotnum++)
+			{
+			if(ref != nod && lotstatus[lotnum] == 1)  // ie open
+				{
+				if(tradetype[lotnum] == 1||tradetype[lotnum] == 2)  // ie long
+					openlotvalue+=c[ref]-lotentryprice[lotnum];
+				if(tradetype[lotnum] == -1||tradetype == -2)  // ie short
+					openlotvalue+=lotentryprice[lotnum]-c[ref];
+				}
+			}
+        if((i1/100.0) >= longthresh  && tradertype != 2 )  // long signal 
+			{
+			if(numlotsactive < maxlots )  // lot available?
+				{
+				for(k=1;k<=lotspertrade;k++)
+					{
+					if(numlotsactive >= maxlots)
+						break;
+					if(shortflag && nospreadflag)
+						break;
+					for(lotnum=0;lotnum<maxlots;lotnum++) // find avail lot ref#
+						{
+						if(lotstatus[lotnum] == 0)  // ie available
+						break;
+						}
+					kount=kount+1;
+					openmarker[ref]+=1;
+					lottarget[lotnum]=c[ref]*(1.0+((i1/100.0)*fsf));
+					if(entrytypeflag == 1)
+						lotentryprice[lotnum]=c[ref];
+					else
+						lotentryprice[lotnum]=o[ref+1];
+					maxcloseprice[lotnum]=c[ref];
+					tradetype[lotnum]=1; //long 
+					lotstatus[lotnum]=1; //mark this lot as open , ie used
+					lotopenref[lotnum]=ref;
+					numlotsactive=numlotsactive+1;
+					if(d)fprintf(pr,"bought long, lotnum%d @ %5.2f pred=%5.2f\n",lotnum+1,c[ref],pred[ref]);
+					}
+				}
+			}
+        if((i1/100.0) < longthresh && i2/100.0 >=longthresh2 && tradertype != 2 )  // long signal,secondary .prd 
+			{
+			if(numlotsactive < maxlots )  // lot available?
+				{
+				for(k=1;k<=lotspertrade;k++)
+					{
+					if(numlotsactive >= maxlots)
+						break;
+					if(shortflag && nospreadflag)
+						break;
+					for(lotnum=0;lotnum<maxlots;lotnum++) // find avail lot ref#
+						{
+						if(lotstatus[lotnum] == 0)  // ie available
+						break;
+						}
+					kount=kount+1;
+					openmarker[ref]+=1;
+					lottarget[lotnum]=c[ref]*(1.0+((i2/100.0)*fsf));
+					if(entrytypeflag == 1)
+						lotentryprice[lotnum]=c[ref];
+					else
+						lotentryprice[lotnum]=o[ref+1];
+					maxcloseprice[lotnum]=c[ref];
+					tradetype[lotnum]=2; //secondary long 
+					lotstatus[lotnum]=1; //mark this lot as open , ie used
+					lotopenref[lotnum]=ref;
+					numlotsactive=numlotsactive+1;
+					if(d)fprintf(pr,"bought, secondary long lotnum%d @ %5.2f pred2=%5.2f\n",lotnum+1,c[ref],pred2[ref]);
+					}
+				}
+			}
+        if((i1/100.0) <= shortthresh  && tradertype !=1 )  // short signal
+			{
+			if(numlotsactive < maxlots)   // ie lot available
+				{
+				for(k=1;k<=lotspertrade;k++)
+					{
+					if(numlotsactive >= maxlots)
+						break;
+					if(longflag && nospreadflag)
+						break;
+					for(lotnum=0;lotnum<maxlots;lotnum++) // find avail lot ref#
+						{
+						if(lotstatus[lotnum] == 0)  // ie available
+						break;
+						}
+					kount=kount+1;
+					numlotsactive=numlotsactive+1;
+					openmarker[ref]-=1;
+					lottarget[lotnum]=c[ref]*(1.0+((i1/100.0)*fsf));
+					if(entrytypeflag == 1)
+						lotentryprice[lotnum]=c[ref];
+					else
+						lotentryprice[lotnum]=o[ref+1];
+					mincloseprice[lotnum]=c[ref];
+					tradetype[lotnum]=-1; //short
+					lotstatus[lotnum]=1;  //active
+					lotopenref[lotnum]=ref;
+					if(d)fprintf(pr,"sold short, lotnum%d @ %5.2f  pred=%5.2f\n",lotnum+1,c[ref],pred[ref]);
+					}
+				}
+			}
+        if((i1/100.0) > shortthresh && i2/100.0 <=shortthresh2 && tradertype !=1 )  // secondary short signal
+			{
+			if(numlotsactive < maxlots)   // ie lot available
+				{
+				for(k=1;k<=lotspertrade;k++)
+					{
+					if(numlotsactive >= maxlots)
+						break;
+					if(longflag && nospreadflag)
+						break;
+					for(lotnum=0;lotnum<maxlots;lotnum++) // find avail lot ref#
+						{
+						if(lotstatus[lotnum] == 0)  // ie available
+						break;
+						}
+					kount=kount+1;
+					numlotsactive=numlotsactive+1;
+					openmarker[ref]-=1;
+					lottarget[lotnum]=c[ref]*(1.0+((i2/100.0)*fsf));
+					if(entrytypeflag == 1)
+						lotentryprice[lotnum]=c[ref];
+					else
+						lotentryprice[lotnum]=o[ref+1];
+					mincloseprice[lotnum]=c[ref];
+					tradetype[lotnum]=-2; //secondary short
+					lotstatus[lotnum]=1;  //active
+					lotopenref[lotnum]=ref;
+					if(d)fprintf(pr,"sold secondary short,@ next days open, lotnum%d @ %5.2f  pred2=%5.2f\n",lotnum+1,c[ref],pred2[ref]);
+					}
+				}
+			}
+		longcount=0;
+		shortcount=0;
+		for(lotnum=0;lotnum<maxlots;lotnum++)
+			{
+			if(lotstatus[lotnum] == 1) // active
+				{
+				if(tradetype[lotnum] == 1 || tradetype[lotnum] == 2)
+					longcount+=1;
+				if(tradetype[lotnum] == -1 || tradetype[lotnum] == -2)
+					shortcount-=1;
+				}
+			}
+                if(dumptoggle == 1) // dump *.lot data
+			fprintf(du,"%d\n",longcount+shortcount);
+                if(dumptoggle == 2) // dump *.prd data
+                        fprintf(du,"%f\n",pred[ref]);
+
+
+		if(d)
+			fprintf(pr,"Cumulative Equity in Mkt. Points(open and closed positions)=%9.2f\n",account[ref]+openlotvalue);
+		if(eq)
+			fprintf(equ,"%9.2f\n",account[ref]+openlotvalue);
+		if(longflag && shortflag && d)
+			fprintf(pr,"-------------------Spread position in effect.\n");
+		randu[ref]=account[ref]+openlotvalue;
+		}
+	c_mdds();
+	for(x=1;x<=mcount;x++)
+		summonthlygain+=monthlygain[x];
+	avemonthlygain=summonthlygain/mcount;
+	aapw=avemonthlygain*12.0;
+	if(oflag && grtoggle == 1 )
+		{
+		plot_account();
+		draw_grid();
+        	p_pred();
+		p_actual();
+		plot_buyandhold();
+           //     p_ooscorr();
+		delay(100);
+		if(stepflag == 1)
+				{
+                                printf("   <Enter>view next,2<-save map,3<-continue evolution,4<-show map,5<-replicate x 3 \n");
+				gets(string);
+				ans=atoi(string);
+				if( ans == 4)
+					{
+					_clearscreen(_GCLEARSCREEN);
+					draw_it2();
+					}
+				if( ans == 5)
+					{
+                                         for(genenum=0;genenum<MAXGENES;genenum++)
+                                                parent[competitor_ss][genenum]=offspring[genenum];
+                                         fitness[competitor_ss]=fitness_offspring;
+                                         oosfitness[competitor_ss]=oosfitness_offspring;
+                                         printf("Competitor  # %d replaced.............\n",competitor_ss);
+                                         competitor_ss=rand()/(32766/MAXPOPULATION);
+                                         for(genenum=0;genenum<MAXGENES;genenum++)
+                                                parent[competitor_ss][genenum]=offspring[genenum];
+                                         fitness[competitor_ss]=fitness_offspring;
+                                         oosfitness[competitor_ss]=oosfitness_offspring;
+                                         printf("Competitor  # %d replaced.............\n",competitor_ss);
+                                         competitor_ss=rand()/(32766/MAXPOPULATION);
+                                         for(genenum=0;genenum<MAXGENES;genenum++)
+                                                parent[competitor_ss][genenum]=offspring[genenum];
+                                         fitness[competitor_ss]=fitness_offspring;
+                                         oosfitness[competitor_ss]=oosfitness_offspring;
+                                         printf("Competitor  # %d replaced.............\n",competitor_ss);
+                                         delay(1000);
+                                         }
+				if( ans == 2)
+					 {
+					 mapnamecount++;
+					 write_olive();
+                                         competitor_ss=rand()/(32766/MAXPOPULATION);
+					 }
+				if(ans == 3)
+					 {
+					 if(grtoggle == 1)
+						 {  
+						 _setvideomode(_DEFAULTMODE);
+						 }
+					 clrscr();
+					 grtoggle*=-1;
+					 stepflag=0;
+					 donestep=1;
+					 return(1);
+					 }
+				}
+		_clearscreen(_GCLEARSCREEN);
+		return(1);
+		}
+    if(grtoggle == 1 )
+		  {
+		  ddist10();
+		  ddist20();
+		  ddist30();
+		  ddist40();
+		  getch();
+		  }
+     if(grtoggle==1 )
+		  {
+		  _clearscreen(_GCLEARSCREEN);
+		  mk_box();
+		  _moveto(220,20);
+		  _setcolor(LIGHTGRAY);
+		  _outgtext("Account Growth History");
+		  plot_account();
+		  plot_buyandhold();
+		  getch();
+		  _setvideomode(_DEFAULTMODE);
+		  clrscr();
+		  }
+	stddev=sqrt(sumdiffsqrd/lotcount);
+	printf("Number of lots put on (new & re-entries)= %ld\n",kount);
+	printf("Number of lots that hit target = %d\n",numhittarget);
+	printf("Number of open lots that timed-out profitably = %d\n",numexpprofit);
+	printf("Number of open lots that timed-out at a loss  = %d\n",numexploss);
+	printf("Number of stop-loss hits = %d\n",numstopped);
+	printf("Number of re-entries from stopped-out = %d\n",numreentered);
+	printf("Number of stopped lots that timed-out = %d\n",numstopsexp);
+	printf("Max 20 day draw-down(points)= %d\n",mdd20);
+	printf("Max 60 day draw-down(points)= %d\n",mdd60);
+	printf("Max 120 day draw-down(points)= %d\n",mdd120);
+	printf("Max 250 day draw-down(points)= %d\n",mdd250);
+	if(kount!=0)
+		printf("Average dwell= %3.2f days\n",sumdaysold/kount);
+	printf("Total market points gain = %f\n",account[simstop-1]);
+	if(kount!=0)
+		printf("Mean points gain per lot = %f\n",account[simstop-1]/kount);
+	c_lotstats();
+	printf("# wins = %d   #losses = %d\n",wincount,losscount);
+	if(wincount != 0)
+	printf("Average points won per winning lot: %f\n",winsum/wincount);
+	if(losscount != 0)
+	printf("Average points lost per losing lot: %f\n",losssum/losscount);
+	if(mdd60 < 0)
+	printf("60 day drawdown Sterling Ratio = %f\n",(avemonthlygain*12)/(-mdd60));
+	printf("         Ave annual points won = %f\n",avemonthlygain*12.0);
+	c_lastyear();
+      //  printf("dayweight[1]=%f\n",dayweight[1]);
+	printf("Test data maximum 20 day drawdown: %d\n",lymdd20);
+	printf("Test data maximum 60 day drawdown: %d\n",lymdd60);
+	printf("Test data maximum 120 day drawdown: %d\n",lymdd120);
+	printf("Test data maximum 250 day drawdown: %d\n",lymdd250);
+	printf("Test data points won = %f\n",account[nod-hide]-account[nod-(hide+virg)]);
+	printf("Enter returns....");
+	if(initflag == 0)
+		  gets(string);
+	if(d)
+		 fclose(pr);
+	if(eq)
+		{
+		eq=0;
+		fclose(equ);
+		}
+	if(dumptoggle)
+		fclose(du);
+	return(1);
+	}
+
+
+
+
+
+
+
+
+c_lotstats()
+	{
+	int x;
+	wincount=0;
+	losscount=0;
+	winsum=0.0;
+	losssum=0.0;
+	for(x=1;x<=lotcount;x++)
+		{
+		if(lotresult[x] >= 0.0)
+			{
+			++wincount;
+			winsum+=lotresult[x];
+			}
+		else
+			{
+			++losscount;
+			losssum+=lotresult[x];
+			}
+		}
+	return(1);
+	}
+
+
+
+p_corr(ref,chg,type)
+	int ref;
+	float chg;
+	int type;
+	{
+	int x,y;
+	int xstart=320;
+	int ystart=240;
+	float xscale=13;
+	float yscale=10;
+	int dontskipflag=0;
+	if(ref >= nod-((virg+foldshift)+foldwidth+hide) && ref < nod-(virg+foldshift+hide))
+		dontskipflag=1; // opt segment
+	if(ref >= moosb2 && ref <= moose2)
+		dontskipflag=1; // middle oos segment2
+	if(ref >= moosb && ref <= moose)
+		dontskipflag=1; // middle oos segment
+	if(ref >= nod-(virg+hide))
+		dontskipflag=1; // confirm generalization segment
+	if(ref >= nod-hide && hidetoggle == -1)
+		dontskipflag=1;
+	if(ref >= nod-hide && hidetoggle == 1)
+		dontskipflag=1;
+	if(dontskipflag != 1)
+		return(1);
+	if(type == 1 || type == -1)
+		x=xstart+(pred[ref])*xscale;
+	else
+		x=xstart+(pred2[ref])*xscale;
+	y=ystart-chg*yscale;
+	if(type == 1 || type == -1)
+		{
+		if(pred[ref] >= 0)
+			{
+			_setcolor(GREEN);
+			_setpixel(x,y);
+			}
+		else
+			{
+			_setcolor(RED);
+			_setpixel(x,y);
+			}
+		}
+	if(type == 2 || type == -2)
+		{
+		if(pred2[ref] >= 0)
+			{
+			_setcolor(GREEN);
+			_setpixel(x,y);
+			}
+		else
+			{
+			_setcolor(RED);
+			_setpixel(x,y);
+			}
+		}
+	return(1);
+	}
+
+
+draw_oosgrid()
+	{
+	_setcolor(LIGHTGRAY);
+	_moveto(430,340);// horizontal
+	_lineto(610,340);//    "
+	_moveto(520,240);// vertical
+	_lineto(520,440);
+     _setcolor(LIGHTBLUE);
+	_moveto(428,390);
+	_outgtext("Generalization Validation");
+	_moveto(478,400);
+     _outgtext("Scattergram");
+	_moveto(520,300);
+	_settextorient(1,1000);
+	_setcharsize(8,8);
+	_setcharspacing(-2);
+	_setcolor(YELLOW);
+	_grtext(600,340,"<-Virg Returns->");
+	_settextorient(1,0);
+	_moveto(474,374);
+	_setcolor(MAGENTA);
+	_outgtext("<-OPT Returns->");
+	return(1);
+	}
+
+
+
+
+
+p_ooscorr()
+	{
+	int x,y,count;
+	int xstart=520;
+	int ystart=340;
+	float xscale=50;
+	float yscale=50;
+	float virgreturns;
+     float optreturns;
+	virgreturns=(account[nod-hide]-account[nod-((virg+foldshift)+hide)])/(float)(virg+foldshift);
+	optreturns=(account[nod-((virg+foldshift)+hide)]-account[nod-(hide+(virg+foldshift)+foldwidth)])/(float)foldwidth;
+	for(count=1;count<=ocount;count++)
+     	{
+		x=xstart+(oosf[count]*xscale*scatterscale);
+		y=ystart-(vf[count]*yscale*scatterscale);
+		if(count<3000)
+			{
+			_setcolor(BLUE);
+			_setpixel(x,y);
+			_setpixel(x,y+1);
+			}	
+		if(count>=3000)
+			{
+			_setcolor(BLUE);
+			_setpixel(x,y);
+			_setcolor(LIGHTBLUE);
+			_setpixel(x,y+1);
+			}
+		if(count>6000)
+			{
+			_setcolor(LIGHTBLUE);
+			_setpixel(x,y);
+			_setpixel(x,y+1);
+			}
+		if(count>9000)
+			{
+			_setcolor(LIGHTBLUE);
+			_setpixel(x,y);
+			_setcolor(LIGHTGRAY);
+			_setpixel(x,y+1);
+			}
+		if(count>12000)
+			{
+			_setcolor(LIGHTGRAY);
+			_setpixel(x,y);
+			_setpixel(x,y+1);
+			}
+		if(count>15000)
+			{
+			_setcolor(LIGHTGRAY);
+			_setpixel(x,y);
+			_setcolor(YELLOW);
+			_setpixel(x,y+1);
+			}
+		if(count>18000)
+			{
+			_setcolor(YELLOW);
+			_setpixel(x,y);
+			_setpixel(x,y+1);
+			}
+		if(count>21000)
+			{
+			_setcolor(YELLOW);
+			_setpixel(x,y);
+			_setcolor(WHITE);
+			_setpixel(x,y+1);
+			}
+		if(count>24000)
+			{
+			_setcolor(WHITE);
+			_setpixel(x,y);
+			_setpixel(x,y+1);
+			}
+		if(count>27000)
+			{
+			_setcolor(RED);
+			_setpixel(x,y);
+			_setpixel(x,y+1);
+			}
+		}
+	x=xstart+(optreturns*xscale*scatterscale);
+	y=ystart-(virgreturns*yscale*scatterscale);
+	_setcolor(GREEN);
+	_setpixel(x,y);
+	_setpixel(x,y);
+	_setpixel(x+1,y);
+	_setpixel(x+2,y);
+	_setpixel(x-1,y);
+	_setpixel(x-2,y);
+	_setpixel(x,y+1);
+	_setpixel(x,y+1);
+	_setpixel(x+1,y+1);
+	_setpixel(x+2,y+1);
+	_setpixel(x-1,y+1);
+	_setpixel(x-2,y+1);
+	_setpixel(x,y+2);
+	_setpixel(x,y+2);
+	_setpixel(x+1,y+2);
+	_setpixel(x+2,y+2);
+	_setpixel(x-1,y+2);
+	_setpixel(x-2,y+2);
+	_setpixel(x,y-1);
+	_setpixel(x,y-1);
+	_setpixel(x+1,y-1);
+	_setpixel(x+2,y-1);
+	_setpixel(x-1,y-1);
+	_setpixel(x-2,y-1);
+	_setpixel(x,y-2);
+	_setpixel(x,y-2);
+	_setpixel(x+1,y-2);
+	_setpixel(x+2,y-2);
+	_setpixel(x-1,y-2);
+	_setpixel(x-2,y-2);
+	draw_oosgrid();
+     p_thrutime();
+	return(1);
+	}
+
+
+p_thrutime()
+	{
+	int x,y,count,z;
+	int xstart=10;
+	int ystart=420;
+	int ystart2=440;
+	int ystart3=430;
+	int ystart4=450;
+	int ystart5=460;
+	float yscale=75;
+	float sum;
+	_setcolor(LIGHTGRAY);
+	_moveto(10,420);
+	_lineto(610,420);
+	_moveto(10,440);
+	_lineto(610,440);
+	_setcolor(YELLOW);
+	for(count=201;count<ocount;count++)
+		{
+		sum=0.0;
+		for(z=1;z<=200;z++)
+			{
+			sum+=vf[count-z];
+			}   
+		x=xstart+(count/50);
+		y=ystart-(((sum/200.0)*yscale)*scatterscale);
+		_setpixel(x,y);
+		}
+	_setcolor(MAGENTA);
+	for(count=201;count<ocount;count++)
+		{
+                sum=0.0;
+		for(z=1;z<=200;z++)
+			{
+			sum+=oosf[count-z];
+			}
+		x=xstart+(count/50);
+		y=ystart2-(((sum/200.0)*yscale)*scatterscale);
+		_setpixel(x,y);
+		}
+	_setcolor(BROWN);
+	for(count=201;count<ocount;count++)
+		{
+		sum=0.0;
+		for(z=1;z<=200;z++)
+			{
+			sum+=frontoos[count-z];
+			}
+		x=xstart+(count/50);
+		y=ystart3-(((sum/200.0)*yscale)*scatterscale);
+		_setpixel(x,y);
+		}
+	_setcolor(LIGHTRED);
+	for(count=201;count<ocount;count++)
+		{
+          sum=0.0;
+		for(z=1;z<=200;z++)
+			{
+			sum+=moos[count-z];
+			}
+		x=xstart+(count/50);
+		y=ystart4-(((sum/200.0)*yscale)*scatterscale);
+		if(y < 10)
+			y=10;
+		if(y > 470)
+			y=470;
+		_setpixel(x,y);
+		}
+	_setcolor(RED);
+	for(count=201;count<ocount;count++)
+		{
+		sum=0.0;
+		for(z=1;z<=200;z++)
+			{
+			sum+=moos2[count-z];
+			}
+		x=xstart+(count/50);
+		y=ystart5-(((sum/200.0)*yscale)*scatterscale);
+		if(y < 10)
+			y=10;
+		if(y > 470)
+			y=470;
+		_setpixel(x,y);
+		}
+	_setcolor(WHITE);
+	_setcharsize(6,6);
+	_setcharspacing(-2);
+	_grtext(10,450,"<-Offspring count->");
+	_grtext(90,450,"4k");
+	_grtext(125,450,"6k");
+	_grtext(165,450,"8k");
+	_grtext(205,450,"10k");
+	_grtext(245,450,"12k");
+	_grtext(285,450,"14k");
+	_grtext(325,450,"16k");
+	_grtext(365,450,"18k");
+	_grtext(405,450,"20k");
+	_grtext(445,450,"22k");
+	_grtext(485,450,"24k");
+	_grtext(525,450,"26k");
+	_grtext(565,450,"28k");
+	_grtext(605,450,"30k");
+	return(1);        
+	}
+
+
+
+
+draw_cgrid()
+	{
+	int t;
+	float xscale=13;
+	float yscale=10;
+	_setcolor(YELLOW);
+	_moveto(190,240);
+	_lineto(450,240);
+	_setcolor(MAGENTA);
+	_moveto(320,140);
+	_lineto(320,340);
+	_setcolor(WHITE);
+	for(t=0;t<21;t++)
+		{
+		_moveto(190+t*xscale,238);
+		_lineto(190+t*xscale,242);
+		}
+	for(t=0;t<21;t++)
+		{
+		_moveto(318,140+t*yscale);
+		_lineto(322,140+t*yscale);
+		}
+	_moveto(278,310);
+	_setcolor(LIGHTBLUE);
+	_outgtext("Trade Result");
+	_moveto(280,318);
+	_outgtext("Scattergram");
+	_moveto(316,100);
+	_settextorient(1,1000);
+	_setcharsize(8,8);
+	_setcharspacing(-2);
+	_grtext(316,135,"<-Trade result points->");
+	_settextorient(1,0);
+	_moveto(280,240);
+	_outgtext("<- Forecast % ->");
+	return(1);
+	}
+
+
+plot_account()
+	{
+	char buffer[60];
+	int start;
+	int xstart=10;
+	float xscale;
+	int ystart=300;
+	int ref;
+	int x,y;
+	float yscale=(800.0/accountscale);
+	_moveto(xstart,ystart);
+	xscale=600.0/(simstop-simstart);
+	_setcolor(BROWN);
+	start=nod-((learn-foldshift)+foldwidth+(virg+foldshift)+hide);
+	if(start < 250)
+		start=250;
+	for(ref=simstart;ref<simstop;ref++)
+		{
+		x=xstart+((ref-simstart)*xscale);
+		y=ystart-randu[ref]*yscale*rss*grss;
+		if(randu[ref] == 0.0 || ref == simstart)
+			_moveto(x,y);
+		else
+			_lineto(x,y);
+		if(ref >= start)
+			_setcolor(GREEN); // learning segment
+		if(ref >= nod-((virg+foldshift)+foldwidth+hide) && ref < nod-(virg+foldshift+hide))
+                        {
+			_setcolor(MAGENTA); // opt segment
+                        _lineto(x,y-1);
+                    //    _moveto(x,y);
+                        }
+                if(ref >= moosb2 && ref <= moose2)
+			_setcolor(RED); // middle oos segment2
+		if(ref >= moosb && ref <= moose)
+			_setcolor(LIGHTRED); // middle oos segment
+		if(ref >= nod-(virg+hide))
+			_setcolor(YELLOW); // confirm generalization segment
+                if(ref >= nod-hide && hidetoggle == -1)
+			_setcolor(BLACK);
+		if(ref >= nod-hide && hidetoggle == 1)
+			_setcolor(WHITE);
+		}
+  //	plot_newcells();
+	gcvt(account[nod-1],7,buffer);
+	_moveto(160,40);
+	_setcolor(YELLOW);
+	_outgtext("Account Gain: ");
+	_setcolor(WHITE);
+	_outgtext(buffer);
+	_setcolor(YELLOW);
+	_outgtext(" Market Points");
+        itoa((simstop-simstart)+1,buffer,10);
+	_moveto(200,460);
+	_outgtext("<-- ");
+	_setcolor(WHITE);
+	_outgtext(buffer);
+	_setcolor(YELLOW);
+	_outgtext(" Days in Simulation -->");
+	if(grtoggle) delay(200);
+	return(1);
+	}
+
+
+plot_newcells()
+	{
+	char buffer[60];
+	int start;
+	int xstart=10;
+	float xscale;
+	int ystart=325;
+	int ref;
+	int x,y;
+	float yscale=2.0;
+	_moveto(xstart,ystart);
+	xscale=600.0/(simstop-simstart);
+	_setcolor(RED);
+	start=nod-((learn-foldshift)+foldwidth+(virg+foldshift)+hide);
+	if(start < 250)
+		start=250;
+	for(ref=simstart;ref<simstop;ref++)
+		{
+		x=xstart+((ref-simstart)*xscale);
+		y=ystart-sumnewcells[ref]*yscale;
+		if(sumnewcells[ref] == 0.0 || ref == simstart)
+			_moveto(x,y);
+		else
+			_lineto(x,y);
+		}
+	return(1);
+	}
+
+
+
+
+plot_buyandhold()
+	{
+	int xstart=10;
+	float xscale,max;
+        int ystart=450;
+	int ref;
+	int x,y;
+	float yscale;
+        max=0.0;
+	for(ref=simstart;ref<=nod;ref++)
+		{
+		if(c[ref]>max)
+			max=c[ref];
+          }
+	yscale=200.0/max;
+	_moveto(xstart,ystart);
+	xscale=600.0/(nod-simstart);
+	_setcolor(LIGHTBLUE);
+	for(ref=simstart;ref<=nod;ref++)
+		{
+		x=xstart+((ref-simstart)*xscale);
+		y=ystart-(c[ref]*yscale);
+		if(ref == simstart)
+			_moveto(x,y);
+		else
+			_lineto(x,y);
+		}
+	show_colorlegend();
+	return(1);
+	}
+
+
+
+show_colorlegend()
+	{
+	_setcharsize(8,8);
+	_setcharspacing(-2);
+     _setcolor(LIGHTBLUE);
+	_grtext(10,350,"Lt Blue= Buy and Hold Strategy");
+	_setcolor(BROWN);
+	_grtext(10,360,"Brown  = OOS data on front of stream");
+	_setcolor(GREEN);
+	_grtext(10,370,"Green  = Map Frequency Distribution construction segment");
+	_setcolor(MAGENTA);
+	_grtext(10,380,"Magenta= GA Optimization data segment");
+	_setcolor(YELLOW);
+	_grtext(10,390,"Yellow = Dynamic generalization verification segment");
+	_setcolor(WHITE);
+	_grtext(10,400,"White  = Hidden (OOS) segment on end of stream");
+	return(1);
+	}
+
+
+drawdist()
+	{
+	int x,y,z,ref,period,ichg;
+	int maxdrawdown=0;
+	int array[602];
+	char string[30];
+	float htscale;
+	float sum=0.0;
+	int count=0;
+	clrscr();
+	printf("\n\n    Enter time span (days), for points change distribution: ");
+	gets(string);
+	period=atoi(string);
+	printf("\n      Enter height scale for plotting: ");
+	gets(string);
+	htscale=atof(string);
+	_setvideomode(_VRES16COLOR);
+	mk_box();
+	for(z=0;z<=600;z++)
+		array[z]=0;
+	for(ref=simstart;ref<simstop-period;ref++)
+		{
+		if(randu[ref] == 0.0)
+			continue;
+		ichg=randu[ref+period]-randu[ref];
+		sum+=randu[ref+period]-randu[ref];
+		++count;
+		if(ichg < maxdrawdown)
+			{
+			maxdrawdown=ichg;
+			mddref=ref;
+			}
+		if(ichg < -300)
+			ichg=-300;
+		if(ichg > 300)
+			ichg=300;
+		array[ichg+300]+=1;
+		}
+	for(z=0;z<=600;z++)
+		{
+		_moveto(20+z,400);
+		if(z<300)
+			_setcolor(RED);
+		else
+			_setcolor(GREEN);
+		_lineto(20+z,400-(array[z]*htscale*.2));
+		}
+	printf("points change distribution over any %d day period.\n",period);
+	printf("Full scale = minus to plus 300 points\n");
+	printf("Distribution mean = %f\n",sum/count);
+	printf("Max draw-down points (raw market points) = %d\n",maxdrawdown);
+	printf("occurred starting on ref day # %d\n",mddref);
+	printf("Enter 1 to write account distribution to file, or just <enter> to continue: ");
+	gets(string);
+	if(atoi(string) == 1)   // write file
+		{
+		_setvideomode(_DEFAULTMODE);
+		clrscr();
+		system("dir *.dis");
+		printf("\n\t\t\tEnter account distribution filename: ");
+		gets(string);
+		prd=fopen(string,"w");
+		if(prd == NULL)
+			{
+			printf("Can't open %s\n",string);
+			delay(2000);
+			return(1);
+			}
+		for(x=0;x<600;x++)
+			{
+			fprintf(prd,"%d\n",array[x]);
+			}
+		fclose(prd);
+		}
+    _setvideomode(_DEFAULTMODE);
+	return(1);
+	}
+
+
+
+ddist10()
+	{
+	int x,y,z,ref,period,ichg;
+	int array[302];
+	float htscale;
+        float fy;
+        float win=0.0;
+        float loss=0.0;
+        period=3;
+        htscale=1.0;
+	for(z=0;z<=300;z++)
+		array[z]=0;
+	for(ref=simstart;ref<simstop-period;ref++)
+		{
+		if(randu[ref] == 0.0)
+			continue;
+		ichg=randu[ref+period]-randu[ref];
+                if(randu[ref+1]>randu[ref])
+                        win+=1.0;
+                if(randu[ref+1]<randu[ref])
+                        loss+=1.0;
+		if(ichg < -150)
+			continue;
+		if(ichg > 150)
+			continue;
+		array[ichg+150]+=1;
+		}
+	for(z=0;z<=300;z++)
+		{
+		_moveto(10+z,180);
+		if(z<150)
+			_setcolor(RED);
+		else
+			_setcolor(GREEN);
+        fy=180.0-((float)array[z]*htscale*.2);
+        y=(int)fy;
+     //   printf("z=%d  fy=%f   y=%d\n",z,fy,y);
+        _lineto(10+z,y);
+		}
+	_moveto(50,190);
+	_setcolor(YELLOW);
+    _outgtext("3 day account change distribution");
+	_moveto(60,200);
+	_outgtext("<-Full scale +/- 150 points ->");
+         printf("Win/(Win+Loss) = %f\n",win/(win+loss));
+
+	return(1);
+	}
+
+
+ddist20()
+	{
+	int x,y,z,ref,period,ichg;
+	int array[302];
+	float htscale;
+        period=5;
+	htscale=1.0;
+	for(z=0;z<=300;z++)
+		array[z]=0;
+	for(ref=simstart;ref<simstop-period;ref++)
+		{
+		if(randu[ref] == 0.0)
+			continue;
+		ichg=randu[ref+period]-randu[ref];
+		if(ichg < -150)
+			continue;
+		if(ichg > 150)
+			continue;
+		array[ichg+150]+=1;
+		}
+	for(z=0;z<=300;z++)
+		{
+		_moveto(330+z,180);
+		if(z<150)
+			_setcolor(RED);
+		else
+			_setcolor(GREEN);
+		_lineto(330+z,180-(array[z]*htscale*.2));
+		}
+	_moveto(370,190);
+	_setcolor(YELLOW);
+        _outgtext("5 day account distribution");
+	return(1);
+	}
+
+ddist30()
+	{
+	int x,y,z,ref,period,ichg;
+	int array[302];
+	float htscale;
+        period=10;
+	htscale=1.0;
+	for(z=0;z<=300;z++)
+		array[z]=0;
+	for(ref=simstart;ref<simstop-period;ref++)
+		{
+		if(randu[ref] == 0.0)
+			continue;
+		ichg=randu[ref+period]-randu[ref];
+		if(ichg < -150)
+			continue;
+		if(ichg > 150)
+			continue;
+		array[ichg+150]+=1;
+		}
+	for(z=0;z<=300;z++)
+		{
+		_moveto(10+z,460);
+		if(z<150)
+			_setcolor(RED);
+		else
+			_setcolor(GREEN);
+		_lineto(10+z,460-(array[z]*htscale*.2));
+		}
+	_moveto(50,470);
+	_setcolor(YELLOW);
+        _outgtext("10 day account distribution");
+	return(1);
+	}
+
+ddist40()
+	{
+	int x,y,z,ref,period,ichg;
+	int array[302];
+	float htscale;
+        period=30;
+	htscale=1.0;
+	for(z=0;z<=300;z++)
+		array[z]=0;
+	for(ref=simstart;ref<simstop-period;ref++)
+		{
+		if(randu[ref] == 0.0)
+			continue;
+		ichg=randu[ref+period]-randu[ref];
+		if(ichg < -150)
+			continue;
+		if(ichg > 150)
+			continue;
+		array[ichg+150]+=1;
+		}
+	for(z=0;z<=300;z++)
+		{
+		_moveto(330+z,460);
+		if(z<150)
+			_setcolor(RED);
+		else
+			_setcolor(GREEN);
+		_lineto(330+z,460-(array[z]*htscale*.2));
+		}
+	_moveto(370,470);
+	_setcolor(YELLOW);
+        _outgtext("30 day account distribution");
+	return(1);
+	}
+
+
+c_mdds()
+	{
+	int x,y,z,ref,period,ichg;
+	int maxdrawdown=0;
+	char string[30];
+	float htscale;
+	float sum=0.0;
+	int count=0;
+	mdd20=1000;
+	mdd60=1000;
+	mdd120=1000;
+	mdd250=1000;
+	period=20;
+	for(ref=simstart;ref<simstop-period;ref++)
+		{
+		if(randu[ref] == 0.0)
+			continue;
+		ichg=randu[ref+period]-randu[ref];
+		if(ichg < maxdrawdown)
+			{
+			maxdrawdown=ichg;
+			mddref=ref;
+			}
+		}
+	for(ref=simstart;ref<simstop-20;ref++)
+		{
+		if(randu[ref] == 0.0)
+			continue;
+		ichg=randu[ref+20]-randu[ref];
+		if(ichg < mdd20)
+			{
+			mdd20=ichg;
+			}
+		}
+	for(ref=simstart;ref<simstop-60;ref++)
+		{
+		if(randu[ref] == 0.0)
+			continue;
+		ichg=randu[ref+60]-randu[ref];
+		if(ichg < mdd60)
+			{
+			mdd60=ichg;
+			}
+		}
+	for(ref=simstart;ref<simstop-120;ref++)
+		{
+		if(randu[ref] == 0.0)
+			continue;
+		ichg=randu[ref+120]-randu[ref];
+		if(ichg < mdd120)
+			{
+			mdd120=ichg;
+			}
+		}
+	for(ref=simstart;ref<simstop-250;ref++)
+		{
+		if(randu[ref] == 0.0)
+			continue;
+		ichg=randu[ref+250]-randu[ref];
+		if(ichg < mdd250)
+			{
+			mdd250=ichg;
+			}
+		}
+	return(1);
+	}
+
+
+
+
+
+c_mddsa()
+	{
+	int x,y,z,ref,period,ichg;
+	int maxdrawdown=0;
+	char string[30];
+	float htscale;
+	float sum=0.0;
+	int count=0;
+	mdd20a=1000;
+	mdd60a=1000;
+	mdd120a=1000;
+	mdd250a=1000;
+	period=20;
+	for(ref=250;ref<nod-(virg+foldshift);ref++)
+		{
+		if(randu[ref] == 0.0)
+			continue;
+		ichg=randu[ref+20]-randu[ref];
+		if(ichg < mdd20a)
+			{
+			mdd20a=ichg;
+			}
+		}
+	for(ref=250;ref<nod-(virg+foldshift);ref++)
+		{
+		if(randu[ref] == 0.0)
+			continue;
+		ichg=randu[ref+60]-randu[ref];
+		if(ichg < mdd60a)
+			{
+			mdd60a=ichg;
+			}
+		}
+	for(ref=250;ref<nod-(virg+foldshift);ref++)
+		{
+		if(randu[ref] == 0.0)
+			continue;
+		ichg=randu[ref+120]-randu[ref];
+		if(ichg < mdd120a)
+			{
+			mdd120a=ichg;
+			}
+		}
+/*      for(ref=nod-((virg+foldshift)+foldwidth);ref<nod-(virg+foldshift);ref++)
+		{
+		if(randu[ref] == 0.0)
+			continue;
+		ichg=randu[ref+250]-randu[ref];
+		if(ichg < mdd250a)
+			{
+			mdd250a=ichg;
+			}
+		}*/
+	return(1);
+	}
+
+
+c_lastyear()
+	{
+	int x,y,z,ref,period,ichg;
+	int maxdrawdown=0;
+	char string[30];
+	float sum=0.0;
+	int count=0;
+        lymdd20=10000;
+        lymdd60=10000;
+        lymdd120=10000;
+        lymdd250=10000;
+	for(ref=nod-(virg+20);ref<simstop-20;ref++)
+		{
+		if(randu[ref] == 0.0)
+			continue;
+		ichg=randu[ref+20]-randu[ref];
+		if(ichg < lymdd20)
+			{
+			lymdd20=ichg;
+			}
+		}
+	for(ref=nod-(virg+60);ref<simstop-60;ref++)
+		{
+		if(randu[ref] == 0.0)
+			continue;
+		ichg=randu[ref+60]-randu[ref];
+		if(ichg < lymdd60)
+			{
+			lymdd60=ichg;
+			}
+		}
+	for(ref=nod-(virg+120);ref<simstop-120;ref++)
+		{
+		if(randu[ref] == 0.0)
+			continue;
+		ichg=randu[ref+120]-randu[ref];
+		if(ichg < lymdd120)
+			{
+			lymdd120=ichg;
+			}
+		}
+	for(ref=nod-(virg+250);ref<simstop-250;ref++)
+		{
+		if(randu[ref] == 0.0)
+			continue;
+		ichg=randu[ref+250]-randu[ref];
+		if(ichg < lymdd250)
+			{
+			lymdd250=ichg;
+			}
+		}
+	return(1);
+	}
+
+
+c_sharpe()
+	{
+	float sumdiffsquared=0.0;
+	int ref;
+	int count=0;
+	float sum=0.0;
+	float ave,chg,stddev;
+	double ratio;
+	for(ref=simstart;ref<simstop-20;ref+=20)
+		{
+		++count;
+		sum+=account[ref+20]-account[ref];
+		}
+	ave=sum/count;   //ave monthly return points
+	for(ref=simstart;ref<simstop-20;ref+=20)
+		{
+		chg=account[ref+20]-account[ref];
+		sumdiffsquared+=(chg-ave)*(chg-ave);
+		}
+	ratio=sumdiffsquared/count;
+	stddev=sqrt(ratio);
+	sharperatio=ave/stddev;
+	return(1);
+	}
+
+
+drawtradedist()
+	{
+	int x,y,z,ref,ichg;
+	int array[201];
+	char string[30];
+	float htscale;
+	clrscr();
+	printf("\n      Enter height scale for plotting: ");
+	gets(string);
+	htscale=atof(string);
+	_setvideomode(_VRES16COLOR);
+	mk_box();
+	for(z=0;z<=200;z++)
+		array[z]=0;
+	for(ref=1;ref<=lotcount;ref++)
+		{
+		ichg=lotresult[ref]-1.000;
+		if(ichg < -100)
+			ichg=-100;
+		if(ichg > 100)
+			ichg=100;
+		array[ichg+100]+=1;
+		}
+	for(z=0;z<=200;z++)
+		{
+		_moveto(100+(2*z),350);
+		if(z<100)
+			_setcolor(RED);
+		else
+			_setcolor(GREEN);
+		_lineto(100+(2*z),350-(array[z]*htscale*.05));
+		}
+	printf("Lot result frequency distribution.\n");
+	printf("Height = relative frequency.\n");
+	printf("Each vertical line = 1 points, green is positive.\n");
+	printf("Enter 1 to write trade result distribution to file, or just <enter> to continue: ");
+	gets(string);
+	if(atoi(string) == 1)   // write file
+		{
+        _setvideomode(_DEFAULTMODE);
+		clrscr();
+		system("dir *.trd");
+		printf("\n\t\t\tEnter account distribution filename(*.trd): ");
+		gets(string);
+		prd=fopen(string,"w");
+		if(prd == NULL)
+			{
+			printf("Can't open %s\n",string);
+			delay(2000);
+			return(1);
+			}
+		for(x=0;x<200;x++)
+			{
+			fprintf(prd,"%d\n",array[x]);
+			}
+		fclose(prd);
+		}
+    _setvideomode(_DEFAULTMODE);
+	return(1);
+	}
+
+
+
+
+input_prd()
+	{
+	int ref=0;
+	clrscr();
+	system("dir *.prd");
+	printf("\n\t\t\tEnter primary .prd filename: ");
+	gets(prdstream);
+	prd=fopen(prdstream,"r");
+	if(prd == NULL)
+		{
+		printf("Can't open %s\n",prdstream);
+		delay(2000);
+		return(1);
+		}
+	while(fscanf(prd,"%f\n",&pred[ref]) != EOF)
+			{
+			ref++;
+			continue;
+			}
+	fclose(prd);
+	return(1);
+	}
+
+
+input_prd2()
+	{
+	int ref=0;
+	clrscr();
+	system("dir *.prd");
+	printf("\n\t\t\tEnter secondary .prd filename: ");
+	gets(prdstream2);
+	prd=fopen(prdstream2,"r");
+	if(prd == NULL)
+		{
+		printf("Can't open %s\n",prdstream2);
+		delay(2000);
+		return(1);
+		}
+	while(fscanf(prd,"%f\n",&pred2[ref]) != EOF)
+			{
+			ref++;
+			continue;
+			}
+	fclose(prd);
+	return(1);
+	}
+
+
+
+
+wrtmktpts()
+	{
+	int ref;
+	float sum=0.0;
+	char string[30];
+	clrscr();
+	printf("\n\n\n\t\tEnter file name for Market Point win/loss stream: ");
+	gets(string);
+	prd=fopen(string,"w");
+	for(ref=0;ref<=nod;ref++)
+		{
+		fprintf(prd,"%f\n",marketpts[ref]);
+		sum+=marketpts[ref];
+		}
+	fclose(prd);
+	printf("Sum of market points = %f\n",sum);
+	delay(1000);
+	return(1);
+	}
+
+
+
+write_randu()
+	{
+	int ref;
+	char string[30];
+	clrscr();
+	printf("\n\n\n\t\tEnter file name for realized and unrealized equity stream: ");
+	gets(string);
+	prd=fopen(string,"w");
+	for(ref=0;ref<=nod;ref++)
+		{
+		fprintf(prd,"%f\n",randu[ref]);
+		}
+	fclose(prd);
+	return(1);
+	}
+
+
+fillandwriteret()
+	{
+	int ref;
+	char string[30];
+     prd=fopen("sum.ret","w");
+     for(ref=0;ref<=nod;ref++)
+		sumret[ref]+=account[ref];
+	for(ref=0;ref<=nod;ref++)
+		{
+          fprintf(prd,"%f\n",sumret[ref]);
+		}
+	fclose(prd);
+	return(1);
+	}
+
+
+
+
+
+
+p_s()
+	{
+	int numopened;
+	int numclosed; 
+	int x,y,ref,xmax,ymax,stop;
+	float ht;
+	int xstart=610;
+	int ystart=300;
+	int yscale=1000;
+	x=0;
+	y=0;
+	ymax=479;
+	_setcolor(LIGHTBLUE);
+	stop=300;
+	for(ref=0;ref<=stop;ref++)
+		{
+		if(c[(nod-hs)] == 0)
+			continue;
+		ht=((c[(nod-hs)-ref]-c[(nod-hs)])/c[(nod-hs)])*yscale;
+		x=(xstart-(ref*2));
+		y=ystart-ht;
+		if(ref == 0)
+			{
+			_moveto(x,y);
+			continue;
+			}
+		if(y>ymax)
+			y=ymax;
+		_setcolor(LIGHTBLUE);
+		_lineto(x,y);
+		if(datatype == 0)
+			continue;
+		numopened = openmarker[(nod-hs)-ref];
+		numclosed =closemarker[(nod-hs)-ref];
+		if(numopened > 0 )  /* opened long*/
+			{
+			_setcolor(GREEN);
+			_moveto(x,y+(3*numopened));
+			_lineto(x,y+1);
+			_lineto(x-2,y+3);
+			_moveto(x,y+1);
+			_lineto(x+2,y+3);
+			}
+		_setcolor(LIGHTBLUE);
+		_moveto(x-1,y);
+		if(numopened < 0)  /* opened  short*/
+			{
+			_setcolor(RED);
+			_moveto(x,y+(3*numopened));
+			_lineto(x,y-1);
+			_lineto(x-2,y-3);
+			_moveto(x,y-1);
+			_lineto(x+2,y-3);
+			}
+		_setcolor(LIGHTBLUE);
+		_moveto(x-1,y);
+		if(numclosed > 0)  /* closed long */
+			{
+			_setcolor(MAGENTA);
+			_moveto(x,y-(3*numclosed));
+			_lineto(x,y-1);
+			_lineto(x-2,y-3);
+			_moveto(x,y-1);
+			_lineto(x+2,y-3);
+			}
+		_setcolor(LIGHTBLUE);
+		_moveto(x-1,y);
+		if(numclosed < 0)  /* closed  short */
+			{
+			_setcolor(YELLOW);
+			_moveto(x,y-(3*numclosed));
+			_lineto(x,y-1);
+			_lineto(x-2,y+3);
+			_moveto(x,y-1);
+			_lineto(x+2,y+3);
+			}
+		_setcolor(LIGHTBLUE);
+		_moveto(x-1,y);
+		if(stopmarker[(nod-hs)-ref] != 0)
+			{
+			_setcolor(LIGHTRED);
+			_moveto(x,y-(30+(3*stopmarker[(nod-hs)-ref])));
+			_lineto(x,y-30);
+			}
+		_setcolor(LIGHTBLUE);
+		_moveto(x-1,y);
+		if(reentermarker[(nod-hs)-ref] != 0)
+			{
+			_setcolor(LIGHTGREEN);
+			_moveto(x,y-(20+(3*reentermarker[(nod-hs)-ref])));
+			_lineto(x,y-20);
+			}
+		_setcolor(LIGHTBLUE);
+		_moveto(x-1,y);
+		}
+	return(1);
+	}
+
+u_p_s()
+	{
+	int numopened;
+	int numclosed; 
+	int x,y,ref,xmax,ymax,stop;
+	float ht;
+	int xstart=610;
+	int ystart=300;
+	int yscale=1000;
+	x=0;
+	y=0;
+	ymax=479;
+	_setcolor(0);
+	stop=300;
+	for(ref=0;ref<=stop;ref++)
+		{
+		if(c[(nod-hs)] == 0)
+			continue;
+		ht=((c[(nod-hs)-ref]-c[(nod-hs)])/c[(nod-hs)])*yscale;
+		x=(xstart-(ref*2));
+		y=ystart-ht;
+		if(ref == 0)
+			{
+			_moveto(x,y);
+			continue;
+			}
+		if(y>ymax)
+			y=ymax;
+		_setcolor(0);
+		_lineto(x,y);
+		numopened = openmarker[(nod-hs)-ref];
+		numclosed =closemarker[(nod-hs)-ref];
+		if(numopened > 0 )  /* opened long*/
+			{
+			_setcolor(0);
+			_moveto(x,y+(3*numopened));
+			_lineto(x,y+1);
+			_lineto(x-2,y+3);
+			_moveto(x,y+1);
+			_lineto(x+2,y+3);
+			}
+		_setcolor(0);
+		_moveto(x-1,y);
+		if(numopened < 0)  /* opened  short*/
+			{
+			_setcolor(0);
+			_moveto(x,y+(3*numopened));
+			_lineto(x,y-1);
+			_lineto(x-2,y-3);
+			_moveto(x,y-1);
+			_lineto(x+2,y-3);
+			}
+		_setcolor(0);
+		_moveto(x-1,y);
+		if(numclosed > 0)  /* closed long */
+			{
+			_setcolor(0);
+			_moveto(x,y-(3*numclosed));
+			_lineto(x,y-1);
+			_lineto(x-2,y-3);
+			_moveto(x,y-1);
+			_lineto(x+2,y-3);
+			}
+		_setcolor(0);
+		_moveto(x-1,y);
+		if(numclosed < 0)  /* closed  short */
+			{
+			_setcolor(0);
+			_moveto(x,y-(3*numclosed));
+			_lineto(x,y-1);
+			_lineto(x-2,y+3);
+			_moveto(x,y-1);
+			_lineto(x+2,y+3);
+			}
+		_setcolor(0);
+		_moveto(x-1,y);
+		if(stopmarker[(nod-hs)-ref] != 0)
+			{
+			_setcolor(0);
+			_moveto(x,y-(30+(3*stopmarker[(nod-hs)-ref])));
+			_lineto(x,y-30);
+			}
+		_setcolor(0);
+		_moveto(x-1,y);
+		if(reentermarker[(nod-hs)-ref] != 0)
+			{
+			_setcolor(0);
+			_moveto(x,y-(20+(3*reentermarker[(nod-hs)-ref])));
+			_lineto(x,y-20);
+			}
+		_setcolor(0);
+		_moveto(x-1,y);
+		}
+	return(1);
+	}
+
+
+
+outline()
+	{
+	_setcolor(6);
+	_moveto(580,17);
+	_lineto(630,17);
+	_lineto(630,30);
+	_lineto(580,30);
+	_lineto(580,17);
+	_moveto(580,48);
+	_lineto(630,48);
+	_lineto(630,61);
+	_lineto(580,61);
+	_lineto(580,48);
+	_moveto(580,79);
+	_lineto(630,79);
+	_lineto(630,96);
+	_lineto(580,96);
+	_lineto(580,79);
+	return(1);
+	}
+
+p_pred()
+	{
+	int x,y,ref,xmax,ymax,stop;
+	float ht;
+	float targprice;
+	float tdpw;   // test data points won
+	char buffer[20];
+	int xstart=610;
+	int ystart=200;
+	int yscale=10;
+	x=0;
+	y=0;
+	ymax=479;
+	_setcolor(RED);  //plot thresholds
+        y=ystart-(longthresh*100.0)*yscale;
+        _moveto(0,y);
+        _lineto(610,y);
+        y=ystart-(shortthresh*100.0)*yscale;
+        _moveto(0,y);
+        _lineto(610,y);
+        _setcolor(CYAN);
+	color=2;
+	_moveto(xstart,ystart);
+	_lineto(0,ystart);
+	color=4;
+	_setcolor(YELLOW);
+	if((nod-hs) > 300)
+		stop=300;
+	else
+		stop=nod;
+	for(ref=0;ref<=stop;ref++)
+		{
+		if(c[(nod-hs)] == 0 || c[(nod-hs)-ref] == 0)
+			continue;
+		ht=(pred[(nod-hs)-ref])*yscale;
+		x=(xstart-(ref*2));
+		y=ystart-ht;
+		if(ref == 0)
+			{
+			_moveto(x,y);
+			continue;
+			}
+		if(y>ymax)
+			y=ymax;
+		_setcolor(LIGHTCYAN);
+		_lineto(x,y);
+		}
+	itoa(nod-hs,buffer,10);
+	_settextposition(1,2);
+	_outtext("Reference day (far right): ");
+	_outtext(buffer);
+	strcpy(buffer,istream1);
+	_settextposition(1,45);
+	_outtext("Target Market: ");
+	_outtext(buffer);
+	itoa(hs,buffer,10);
+	_settextposition(2,2);
+	_outtext("Days from end of file: ");
+	_outtext(buffer);
+	gcvt((double)c[nod-hs],6,buffer);
+	_settextposition(3,2);
+	_outtext("Furthest right value: ");
+	_outtext(buffer);
+	gcvt((double)pred[nod-hs],3,buffer);
+	_settextposition(4,2);
+	_setcolor(14);
+	_outtext("Forecast percent: ");
+	_outtext(buffer);
+	targprice=c[nod-hs]*(1.0+pred[nod-hs]/100.0);
+     tdpw=account[nod-hide]-account[nod-(hide+virg)];
+	_settextposition(5,2);
+	_outtext("Target price: ");
+	gcvt(targprice,6,buffer);
+	_outtext(buffer);
+	_settextposition(6,2);
+	_outtext("Test Data [yellow] Points Won: ");
+	gcvt(tdpw,4,buffer);
+	_outtext(buffer);
+	_settextposition(2,75);
+	_outtext("Menu");
+	_settextposition(4,75);
+	_outtext("List");
+	_settextposition(6,75);
+	_outtext("Map");
+	outline();
+	return(1);
+	}
+
+
+
+u_p_pred()
+	{
+	int x,y,ref,xmax,ymax,stop;
+	float ht;
+	float targprice;
+	char buffer[20];
+	int xstart=610;
+	int ystart=200;
+	int yscale=10;
+	x=0;
+	y=0;
+	ymax=479;
+	color=0;
+	_moveto(xstart,ystart);
+	_lineto(0,ystart);
+	color=0;
+	_setcolor(0);
+	if((nod-hs) > 300)
+		stop=300;
+	else
+		stop=nod;
+	for(ref=0;ref<=stop;ref++)
+		{
+		if(c[(nod-hs)] == 0 || c[(nod-hs)-ref] == 0)
+			continue;
+		ht=(pred[(nod-hs)-ref])*yscale;
+		x=(xstart-(ref*2));
+		y=ystart-ht;
+		if(ref == 0)
+			{
+			_moveto(x,y);
+			continue;
+			}
+		if(y>ymax)
+			y=ymax;
+		_setcolor(0);
+		_lineto(x,y);
+		}
+	return(1);
+	}
+
+
+p_actual()           /* upper perf band */
+	{
+	int x,y,ref,xmax,ymax,stop,start,day;
+	float ht,chg,max;
+	int xstart=610;
+	int ystart=200;
+	int yscale=1000;  /* 10 pixels per points */
+	x=0;
+	y=0;
+	ymax=479;
+	color=1;
+	_setcolor(color);
+	stop=300;
+	if(hs < gflook)
+		start=gflook-hs;
+	else
+		start=0;
+	for(ref=start;ref<=stop;ref++)
+		{
+		max=-1000.0;
+		for(day=0;day<=gflook;day++)
+			{
+			chg=(c[((nod-hs)-ref)+day]/c[(nod-hs)-ref]-1.0)*yscale;
+			if(chg > max)
+				max=chg;
+			}
+		ht=max;
+		x=xstart-(ref*2);
+		y=ystart-ht;
+		if(ref == start)
+			{
+			_moveto(x,y);
+			continue;
+			}
+		if(y>ymax)
+			y=ymax;
+		_lineto(x,y);
+		}
+	p_lactual();
+	return(1);
+	}
+
+
+u_p_actual()           /* upper perf band */
+	{
+	int x,y,ref,xmax,ymax,stop,start,day;
+	float ht,chg,max;
+	int xstart=610;
+	int ystart=200;
+	int yscale=1000;  /* 10 pixels per points */
+	x=0;
+	y=0;
+	ymax=479;
+	color=1;
+	_setcolor(0);
+	stop=300;
+	if(hs < gflook)
+		start=gflook-hs;
+	else
+		start=0;
+	for(ref=start;ref<=stop;ref++)
+		{
+		max=-1000.0;
+		for(day=0;day<=gflook;day++)
+			{
+			chg=(c[((nod-hs)-ref)+day]/c[(nod-hs)-ref]-1.0)*yscale;
+			if(chg > max)
+				max=chg;
+			}
+		ht=max;
+		x=xstart-(ref*2);
+		y=ystart-ht;
+		if(ref == start)
+			{
+			_moveto(x,y);
+			continue;
+			}
+		if(y>ymax)
+			y=ymax;
+		_lineto(x,y);
+		}
+	u_p_lactual();
+	return(1);
+	}
+
+p_lactual()           /* lower perf band */
+	{
+	int x,y,ref,xmax,ymax,stop,start,day;
+	float ht,chg,min;
+	int xstart=610;
+	int ystart=200;
+	int yscale=1000;
+	x=0;
+	y=0;
+	ymax=479;
+	color=1;
+	_setcolor(color);
+	stop=300;
+	if(hs < gflook)
+		start=gflook-hs;
+	else
+		start=0;
+	for(ref=start;ref<=stop;ref++)
+		{
+		min=1000.0;
+		for(day=0;day<=gflook;day++)
+			{
+			chg=(c[((nod-hs)-ref)+day]/c[(nod-hs)-ref]-1.0)*yscale;
+			if(chg < min)
+				min=chg;
+			}
+		ht=min;
+		x=xstart-(ref*2);
+		y=ystart-ht;
+		if(ref == start)
+			{
+			_moveto(x,y);
+			continue;
+			}
+		if(y>ymax)
+			y=ymax;
+		_lineto(x,y);
+		}
+	return(1);
+	}
+
+u_p_lactual()           /* lower perf band */
+	{
+	int x,y,ref,xmax,ymax,stop,start,day;
+	float ht,chg,min;
+	int xstart=610;
+	int ystart=200;
+	int yscale=1000;
+	x=0;
+	y=0;
+	ymax=479;
+	color=0;
+	_setcolor(color);
+	stop=300;
+	if(hs < gflook)
+		start=gflook-hs;
+	else
+		start=0;
+	for(ref=start;ref<=stop;ref++)
+		{
+		min=1000.0;
+		for(day=0;day<=gflook;day++)
+			{
+			chg=(c[((nod-hs)-ref)+day]/c[(nod-hs)-ref]-1.0)*yscale;
+			if(chg < min)
+				min=chg;
+			}
+		ht=min;
+		x=xstart-(ref*2);
+		y=ystart-ht;
+		if(ref == start)
+			{
+			_moveto(x,y);
+			continue;
+			}
+		if(y>ymax)
+			y=ymax;
+		_lineto(x,y);
+		}
+	return(1);
+	}
+
+
+
+
+
+
+draw_grid()
+		{
+		int xstart=610;
+		int ystart=200;
+		int xstop=10;
+		int x;
+		_setcolor(8);
+		_moveto(xstart,ystart+10);
+		_lineto(xstop,ystart+10);
+		_moveto(xstart,ystart+20);
+		_lineto(xstop,ystart+20);
+		_moveto(xstart,ystart+30);
+		_lineto(xstop,ystart+30);
+		_moveto(xstart,ystart+40);
+		_lineto(xstop,ystart+40);
+		_moveto(xstart,ystart+50);
+		_lineto(xstop,ystart+50);
+		_moveto(xstart,ystart-10);
+		_lineto(xstop,ystart-10);
+		_moveto(xstart,ystart-20);
+		_lineto(xstop,ystart-20);
+		_moveto(xstart,ystart-30);
+		_lineto(xstop,ystart-30);
+		_moveto(xstart,ystart-40);
+		_lineto(xstop,ystart-40);
+		_moveto(xstart,ystart-50);
+		_lineto(xstop,ystart-50);
+		for(x=0;x<=30;x++)
+			{
+			_moveto(xstart-(x*20),ystart-50);
+			_lineto(xstart-(x*20),ystart+250);
+			}
+		_moveto(xstart,ystart+250);
+		_lineto(xstop,ystart+250);
+		_setcolor(15);
+		return(1);
+		}
+
+
+
+void clrscr()
+	{
+	union REGS regs;
+	regs.w.cx=0;
+	regs.w.dx=0x1850;
+	regs.h.bh=7;
+	regs.w.ax=0x0600;
+	int386(0x10,&regs,&regs);
+	gotoxy(0,0);
+	}
+
+void gotoxy(int col,int row)
+	{
+	union REGS xr;
+	xr.h.ah=2;
+	xr.h.dh=row;
+	xr.h.dl=col;
+	xr.h.bh=0;
+	int386(0x10,&xr,&xr);
+	}
+
+calc_params_offspring()
+    {
+    int x;
+    lrate=offspring[0]/4000000.0;
+    tracelength=offspring[1]/(32000);
+    if(tracelength == 0)
+		tracelength=1;
+    for(x=0;x<MAXDIST*8;x++)
+		{
+		mapscale[x]=offspring[31+x]/(32000/gcmapscale);
+                dayweight[x]=(float)(offspring[(MAXDIST*8+32)+x]/(32766.0));
+    //		printf("mapscale[x]=%d\n",mapscale[x]);
+		}
+    lrate2=offspring[14]/4000000.0;
+    tracelength2=offspring[15]/(32000);
+    if(tracelength2 == 0)
+		tracelength2=1;
+    
+    lrate3=offspring[17]/4000000.0;
+    tracelength3=offspring[18]/(32000);
+    if(tracelength3 == 0)
+		tracelength3=1;
+    
+    lrate4=offspring[20]/4000000.0;
+    tracelength4=offspring[21]/(32000);
+    if(tracelength4 == 0)
+		tracelength4=1;
+   
+    flook=offspring[3]/1000;
+    if(flook == 0)
+		flook=1;
+    maxhold=offspring[4]/(32000/gcmaxhold);
+    smaxhold=maxhold; // was offspring[23]/(32000/gcsmaxhold);
+    ft1=offspring[24]/1000;
+    if(ft1<1) ft1=1;
+    ft2=offspring[28]/327;
+    ft3=offspring[29]/327;
+        gft2=(float)ft2/20.0;
+        gft3=(float)ft3/20.0;
+
+    ft4=offspring[30]/5000;
+    f2=offspring[25]/1000;
+    f3=offspring[26]/1000;
+    f4=offspring[27]/1000;
+    if(maxhold == 0)
+		maxhold=1;
+    if(smaxhold == 0)
+		smaxhold=1;
+    longthresh=offspring[5]/3000000.0;
+    if(longthresh<.005)
+        longthresh=.005;
+    shortthresh=-longthresh;
+    maxpass=offspring[7]/(32000/gcmaxpass);
+    if(maxpass == 0)
+		maxpass=1;
+    fsf=offspring[8]/(32000/gcfsf);
+    if(fsf < 1.0)
+	fsf=1.0;
+    stopthresh=offspring[9]/(32000/gcstopthresh);
+    if(stopthresh < minstopthresh)
+		stopthresh=minstopthresh;
+    rthresh=offspring[10]/(32000/gcrthresh);
+    lotspertrade=offspring[11]/(32000/gclotspertrade);
+    if(lotspertrade == 0)
+		lotspertrade=1;
+    maxlots=offspring[12]/(32000/gcmaxlots);
+    if(maxlots == 0)
+		maxlots= 1;
+    maxreentry=offspring[13]/(32000/gcmaxreentry);
+    if(grtoggle == 1)
+    {
+	gotoxy(0,8);
+	printf("               \n");
+	printf("               \n");
+	printf("               \n");
+	printf("               \n");
+	printf("               \n");
+	printf("               \n");
+	printf("               \n");
+	printf("               \n");
+	printf("               \n");
+	printf("               \n");
+	printf("               \n");
+	printf("               \n");
+	printf("               \n");
+	printf("               \n");
+	printf("               \n");
+	printf("               \n");
+	gotoxy(0,9);
+	printf("l1=%f l2=%f l3=%f l4=%f\n",lrate,lrate2,lrate3,lrate4);
+	printf("t1=%d t2=%d t3=%d t4=%d\n",tracelength,tracelength2,tracelength3,tracelength4);
+	printf("offset2=%d offset3=%d offset4=%d\n",f2,f3,f4);
+	printf("long days held=%d\n",maxhold);
+	printf("short days held=%d\n",smaxhold);
+	printf("future look = %d\n",flook);
+	printf("Buy threshold = %f\n",longthresh*100.0);
+	printf("Sell threshold = %f\n",shortthresh*100.0);
+	printf("Forecast scale factor = %f\n",fsf);
+	printf("Lots per trade = %d\n",lotspertrade);
+        printf("Puritythresh = %f\n",puritythresh);
+	printf("Maximum lots allowed = %d\n",maxlots);
+	}
+	return(1);
+	}
+
+calc_params_competitor()
+    {
+    int x;
+    lrate=parent[competitor_ss][0]/4000000.0;
+    tracelength=parent[competitor_ss][1]/(32000);
+    if(tracelength == 0)
+		tracelength=1;
+    for(x=0;x<MAXDIST*8;x++)
+		{
+		mapscale[x]=parent[competitor_ss][31+x]/(32000/gcmapscale);
+                dayweight[x]=(float)(parent[competitor_ss][31+x]/32766.0);
+		}
+    lrate2=parent[competitor_ss][14]/4000000.0;
+    tracelength2=parent[competitor_ss][15]/(32000);
+    if(tracelength2 == 0)
+		tracelength2=1;
+    
+    lrate3=parent[competitor_ss][17]/4000000.0;
+    tracelength3=parent[competitor_ss][18]/(32000);
+    if(tracelength3 == 0)
+		tracelength3=1;
+    
+    lrate4=parent[competitor_ss][20]/4000000.0;
+    tracelength4=parent[competitor_ss][21]/(32000);
+    if(tracelength4 == 0)
+		tracelength4=1;
+    
+    flook=parent[competitor_ss][3]/1000;
+	if(flook == 0)
+		flook=1;
+    maxhold=parent[competitor_ss][4]/(32000/gcmaxhold);
+    smaxhold=maxhold; // was parent[competitor_ss][23]/(32000/gcsmaxhold);
+    ft1=parent[competitor_ss][24]/1000;
+    if(ft1<1) ft1=1;
+    ft2=parent[competitor_ss][28]/327;
+    ft3=parent[competitor_ss][29]/327;
+        gft2=(float)ft2/20.0;
+        gft3=(float)ft3/20.0;
+
+    ft4=parent[competitor_ss][30]/5000;
+    f2=parent[competitor_ss][25]/1000;
+    f3=parent[competitor_ss][26]/1000;
+    f4=parent[competitor_ss][27]/1000;
+	if(maxhold == 0)
+		maxhold=1;
+	if(smaxhold == 0)
+		smaxhold=1;
+    longthresh=parent[competitor_ss][5]/3000000.0;
+    if(longthresh<.005)
+        longthresh=.005;
+
+    shortthresh=-longthresh;
+    maxpass=parent[competitor_ss][7]/(32000/gcmaxpass);
+	if(maxpass == 0)
+		maxpass=1;
+	 fsf=parent[competitor_ss][8]/(32000/gcfsf);
+    if(fsf < 1.0)
+	fsf=1.0;
+    stopthresh=parent[competitor_ss][9]/(32000/gcstopthresh);
+	if(stopthresh < minstopthresh)
+		stopthresh=minstopthresh;
+    rthresh=parent[competitor_ss][10]/(32000/gcrthresh);
+    lotspertrade=parent[competitor_ss][11]/(32000/gclotspertrade);
+	if(lotspertrade == 0)
+		lotspertrade=1;
+    maxlots=parent[competitor_ss][12]/(32000/gcmaxlots);
+	if(maxlots == 0)
+		maxlots= 1;
+    maxreentry=parent[competitor_ss][13]/(32000/gcmaxreentry);
+    if(grtoggle == 1)
+    {
+	gotoxy(0,8);
+	printf("               \n");
+	printf("               \n");
+	printf("               \n");
+	printf("               \n");
+	printf("               \n");
+	printf("               \n");
+	printf("               \n");
+	printf("               \n");
+	printf("               \n");
+	printf("               \n");
+	printf("               \n");
+	printf("               \n");
+	printf("               \n");
+	printf("               \n");
+	printf("               \n");
+	printf("               \n");
+	gotoxy(0,8);
+	printf("lrate=%f lrate2=%f lrate3=%f lrate4=%f\n",lrate,lrate2,lrate3,lrate4);
+	printf("tracelength=%d length2=%d length3=%d length4=%d\n",tracelength,tracelength2,tracelength3,tracelength4);
+	printf("offset2=%d offset3=%d offset4=%d\n",f2,f3,f4);
+	printf("long days held=%d\n",maxhold);
+	printf("short days held=%d\n",smaxhold);
+	printf("future look = %d\n",flook);
+	printf("Buy threshold = %f\n",longthresh*100.0);
+	printf("Sell threshold = %f\n",shortthresh*100.0);
+	printf("Forecast scale factor = %f\n",fsf);
+	printf("Lots per trade = %d\n",lotspertrade);
+        printf("Purity thresh = %f\n",puritythresh);
+	printf("Maximum lots allowed = %d\n",maxlots);
+	}
+	return(1);
+	}
+
+
+
+
+decode_best()            // decode params of best parent chrom
+	{
+     int x;
+	lrate=besteverchrom[0][0]/4000000.0;
+	tracelength=besteverchrom[0][1]/(32000);
+	if(tracelength == 0)
+		tracelength=1;
+	for(x=0;x<MAXDIST*8;x++)
+		{
+		mapscale[x]=besteverchrom[0][31+x]/(32000/gcmapscale);
+                dayweight[x]=(float)(besteverchrom[0][31+x]/32766.0);
+                }
+	lrate2=besteverchrom[0][14]/4000000.0;
+	tracelength2=besteverchrom[0][15]/(32000);
+	if(tracelength2 == 0)
+		tracelength2=1;
+	
+	lrate3=besteverchrom[0][17]/4000000.0;
+	tracelength3=besteverchrom[0][18]/(32000);
+	if(tracelength3 == 0)
+		tracelength3=1;
+	
+	lrate4=besteverchrom[0][20]/4000000.0;
+	tracelength4=besteverchrom[0][21]/(32000);
+	if(tracelength4 == 0)
+		tracelength4=1;
+	
+	flook=besteverchrom[0][3]/1000;
+	if(flook == 0)
+		flook=1;
+	maxhold=besteverchrom[0][4]/(32000/gcmaxhold);
+	if(maxhold == 0)
+		maxhold=1;
+	smaxhold=maxhold; // was besteverchrom[0][23]/(32000/gcsmaxhold);
+	if(smaxhold == 0)
+		smaxhold=1;
+        ft1=besteverchrom[0][24]/1000;
+        if(ft1<1) ft1=1;
+        ft2=besteverchrom[0][28]/327;
+        ft3=besteverchrom[0][29]/327;
+        gft2=(float)ft2/20.0;
+        gft3=(float)ft3/20.0;
+
+	ft4=besteverchrom[0][30]/5000;
+	f2=besteverchrom[0][25]/1000;
+	f3=besteverchrom[0][26]/1000;
+	f4=besteverchrom[0][27]/1000;
+        longthresh=besteverchrom[0][5]/3000000.0;
+        if(longthresh<.005)
+                longthresh=.005;
+
+	shortthresh=-longthresh;
+	maxpass=besteverchrom[0][7]/(32000/gcmaxpass);
+	if(maxpass == 0)
+		maxpass=1;
+	fsf=besteverchrom[0][8]/(32000/gcfsf);
+	if(fsf < 1.0)
+	fsf=1.0;
+	stopthresh=besteverchrom[0][9]/(32000/gcstopthresh);
+	if(stopthresh < minstopthresh)
+		stopthresh=minstopthresh;
+	rthresh=besteverchrom[0][10]/(32000/gcrthresh);
+	lotspertrade=besteverchrom[0][11]/(32000/gclotspertrade);
+	if(lotspertrade == 0)
+		lotspertrade=1;
+	maxlots=besteverchrom[0][12]/(32000/gcmaxlots);
+	if(maxlots == 0)
+		maxlots=1;
+	maxreentry=besteverchrom[0][13]/(32000/gcmaxreentry);
+	return(1);
+	}
+
+
+decode_bestoos()            // decode params of best oos chrom
+	{
+     int x;
+	lrate=bestoos[0][0]/4000000.0;
+	tracelength=bestoos[0][1]/(32000);
+	if(tracelength == 0)
+		tracelength=1;
+	for(x=0;x<MAXDIST*8;x++)
+		{
+		mapscale[x]=bestoos[0][31+x]/(32000/gcmapscale);
+                dayweight[x]=(float)(bestoos[0][31+x]/32766.0);
+		}
+	lrate2=bestoos[0][14]/4000000.0;
+	tracelength2=bestoos[0][15]/(32000);
+	if(tracelength2 == 0)
+		tracelength2=1;
+	
+	lrate3=bestoos[0][17]/4000000.0;
+	tracelength3=bestoos[0][18]/(32000);
+	if(tracelength3 == 0)
+		tracelength3=1;
+	
+	lrate4=bestoos[0][20]/4000000.0;
+	tracelength4=bestoos[0][21]/(32000);
+	if(tracelength4 == 0)
+		tracelength4=1;
+	
+	flook=bestoos[0][3]/1000;
+	if(flook == 0)
+		flook=1;
+	maxhold=bestoos[0][4]/(32000/gcmaxhold);
+	if(maxhold == 0)
+		maxhold=1;
+	smaxhold=maxhold; // was bestoos[0][23]/(32000/gcsmaxhold);
+	if(smaxhold == 0)
+		smaxhold=1;
+        ft1=bestoos[0][24]/1000;
+        if(ft1<1) ft1=1;
+        ft2=bestoos[0][28]/327;
+        ft3=bestoos[0][29]/327;
+        gft2=(float)ft2/20.0;
+        gft3=(float)ft3/20.0;
+
+	ft4=bestoos[0][30]/5000;
+	f2=bestoos[0][25]/1000;
+	f3=bestoos[0][26]/1000;
+	f4=bestoos[0][27]/1000;
+        longthresh=bestoos[0][5]/3000000.0;
+        if(longthresh<.005)
+                longthresh=.005;
+
+	shortthresh=-longthresh;
+	maxpass=bestoos[0][7]/(32000/gcmaxpass);
+	if(maxpass == 0)
+		maxpass=1;
+	fsf=bestoos[0][8]/(32000/gcfsf);
+	if(fsf < 1.0)
+	fsf=1.0;
+	stopthresh=bestoos[0][9]/(32000/gcstopthresh);
+	if(stopthresh < minstopthresh)
+		stopthresh=minstopthresh;
+	rthresh=bestoos[0][10]/(32000/gcrthresh);
+	lotspertrade=bestoos[0][11]/(32000/gclotspertrade);
+	if(lotspertrade == 0)
+		lotspertrade=1;
+	maxlots=bestoos[0][12]/(32000/gcmaxlots);
+	if(maxlots == 0)
+		maxlots=1;
+	maxreentry=bestoos[0][13]/(32000/gcmaxreentry);
+	return(1);
+	}
+
+
+
+
+init_map()
+	{
+	int x,y;
+	for(x=0;x<XSIZE;x++)
+		{
+		for(y=0;y<YSIZE;y++)
+			{
+			map[x][y]=0.0;
+			map2[x][y]=0.0;
+			map3[x][y]=0.0;
+			}
+		}
+	return(1);
+	}
+
+
+
+
+
+
+zero_map()
+	{
+	int x,y;
+        float winmax=-1000.0;
+        float lossmax=-1000.0;
+	for(x=0;x<XSIZE;x++)
+		{
+		for(y=0;y<YSIZE;y++)
+			{
+                        if(map[x][y]>winmax)
+                                winmax=map[x][y];
+                        if(map2[x][y]>lossmax)
+                                lossmax=map2[x][y];
+			}
+		}
+	for(x=0;x<XSIZE;x++)
+		{
+		for(y=0;y<YSIZE;y++)
+			{
+                        if(map[x][y] < winmax*.05)
+                                map[x][y]=0.0;
+                        if(map2[x][y] < lossmax*.05)
+                                map2[x][y]=0.0;
+			}
+		}
+	return(1);
+	}
+
+
+
+fix_maps()
+	{
+	int x,y;
+        for(x=0;x<XSIZE;x++)
+		{
+		for(y=0;y<YSIZE;y++)
+			{
+                        if(map[x][y]< 5.0)
+                                map[x][y]=0.0;
+                        if(map2[x][y]< 5.0)
+                                map2[x][y]=0.0;
+			}
+		}
+        return(1);  
+	}
+
+
+
+
+
+
+smooth()
+        {
+	int x,y;
+	for(x=0;x<XSIZE;x++)
+		{
+                for(y=1;y<YSIZE-1;y++)
+			{
+                        tempmap[x][y]=(map[x][y]+map[x][y-1]+map[x][y+1])/3.0;
+			}
+		}
+	for(x=0;x<XSIZE;x++)
+		{
+                for(y=1;y<YSIZE-1;y++)
+			{
+                        map[x][y]=tempmap[x][y];
+			}
+		}
+	for(x=0;x<XSIZE;x++)
+		{
+                for(y=1;y<YSIZE-1;y++)
+			{
+                        tempmap[x][y]=(map2[x][y]+map2[x][y-1]+map2[x][y+1])/3.0;
+			}
+		}
+	for(x=0;x<XSIZE;x++)
+		{
+                for(y=1;y<YSIZE-1;y++)
+			{
+                        map2[x][y]=tempmap[x][y];
+			}
+		}
+	for(x=0;x<XSIZE;x++)
+		{
+                for(y=1;y<YSIZE-1;y++)
+			{
+                        tempmap[x][y]=(map3[x][y]+map3[x][y-1]+map3[x][y+1])/3.0;
+			}
+		}
+	for(x=0;x<XSIZE;x++)
+		{
+                for(y=1;y<YSIZE-1;y++)
+			{
+                        map3[x][y]=tempmap[x][y];
+			}
+		}
+	return(1);
+	}
+
+
+
+
+
+
+
+
+count_weights()             // count "active" map cells
+	{
+	int x,y;
+	weightcount=0.0;
+	for(x=0;x<XSIZE;x++)
+		{
+		for(y=0;y<YSIZE;y++)
+			{
+			if(map3[x][y]!=0.0)
+				weightcount+=1.0;
+			}
+		}
+	return(1);
+	}
+
+
+
+post_map()  // to view ratio's graphically
+	{
+	int x,y;
+        for(x=0;x<XSIZE;x++)
+		{
+		for(y=0;y<YSIZE;y++)
+			{
+                        if(map[x][y] + map2[x][y] != 0.0)
+				map3[x][y]=map[x][y]/(map[x][y]+map2[x][y])-.5;
+			}
+		}
+	return(1);
+	}
+
+
+
+
+
+build_map()
+	  {
+          int ref,start,day;
+          float chg;
+          float sum,ave;
+          ttp=0;
+          twtp=0;
+          tltp=0;
+	  start=nod-((learn-foldshift)+foldwidth+(virg+foldshift)+hide);
+	  if(start < 250)
+		start=250;
+	  for(ref=start;ref<nod-(virg+hide);ref++)
+		{
+		if(ref>=nod-(virg+foldshift+foldwidth+hide) && ref<nod-(virg+foldshift+hide))
+			continue;  // skip over opt segment
+		if(ref>=moosb && ref<=moose)
+			continue;  //skip over middle oos segment
+		if(ref>=moosb2 && ref<=moose2)
+			continue;  //skip over second middle oos segment
+                chg=(c[ref+trainflook]/c[ref]-1.0)*100.0;
+                globalchg=chg;
+                if(chg>=0.0)
+                        {
+                        twtp+=1;  // increment winning traces counter
+                        }
+                if(chg<0.0)
+                        {
+                        tltp+=1;
+                        }
+                }
+          ttp=twtp+tltp;
+	  start=nod-((learn-foldshift)+foldwidth+(virg+foldshift)+hide);
+	  if(start < 250)
+		start=250;
+	  for(ref=start;ref<nod-(virg+hide);ref++)
+		{
+		if(ref>=nod-(virg+foldshift+foldwidth+hide) && ref<nod-(virg+foldshift+hide))
+			continue;  // skip over opt segment
+		if(ref>=moosb && ref<=moose)
+			continue;  //skip over middle oos segment
+		if(ref>=moosb2 && ref<=moose2)
+			continue;  //skip over second middle oos segment
+                chg=(c[ref+trainflook]/c[ref]-1.0)*100.0;
+                globalchg=fabs(chg);
+                if(chg>=puritythresh)
+                        
+                        fill_map1(ref);
+                        
+                if(chg < -puritythresh)
+                        fill_map2(ref);  
+                }
+	  return(1);
+	  }
+
+
+
+
+
+
+
+        
+
+fill_map1(ref)  // win, sum 1.0 into cells
+	int ref;
+	{
+	int x,y;
+        float chg=1.0;
+        for(x=0;x<gcmaxsamples;x++)
+                {
+                y=(c2[ref-x]/c2[ref]-1.0)*mapscale[0] +CENTER1;
+                if(y > CENTER1+49)
+                        y=CENTER1+49;
+                if( y < CENTER1-49)
+                        y=CENTER1-49;
+                map[x][y]+=chg;
+                }
+        for(x=0;x<gcmaxsamples;x++)
+                {
+                y=(c3[ref-x]/c3[ref]-1.0)*mapscale[1] +CENTER1;
+                if(y > CENTER1+49)
+                        y=CENTER1+49;
+                if( y < CENTER1-49)
+                        y=CENTER1-49;
+                map[x+20][y]+=chg;
+                }
+        for(x=0;x<gcmaxsamples;x++)
+                {
+                y=(c4[ref-x]/c4[ref]-1.0)*mapscale[2] +CENTER1;
+                if(y > CENTER1+49)
+                        y=CENTER1+49;
+                if( y < CENTER1-49)
+                        y=CENTER1-49;
+                map[x+40][y]+=chg;
+                }
+        for(x=0;x<gcmaxsamples;x++)
+                {
+                y=(c5[ref-x]/c5[ref]-1.0)*mapscale[3] +CENTER1;
+                if(y > CENTER1+49)
+                        y=CENTER1+49;
+                if( y < CENTER1-49)
+                        y=CENTER1-49;
+                map[x+60][y]+=chg;
+                }
+        for(x=0;x<gcmaxsamples;x++)
+                {
+                y=(c6[ref-x]/c6[ref]-1.0)*mapscale[4] +CENTER2;
+                if(y > CENTER2+49)
+                        y=CENTER2+49;
+                if( y < CENTER2-49)
+                        y=CENTER2-49;
+                map[x][y]+=chg;
+                }
+        for(x=0;x<gcmaxsamples;x++)
+                {
+                y=(c7[ref-x]/c7[ref]-1.0)*mapscale[5] +CENTER2;
+                if(y > CENTER2+49)
+                        y=CENTER2+49;
+                if( y < CENTER2-49)
+                        y=CENTER2-49;
+                map[x+20][y]+=chg;
+                }
+        for(x=0;x<gcmaxsamples;x++)
+                {
+                y=(c8[ref-x]/c8[ref]-1.0)*mapscale[6] +CENTER2;
+                if(y > CENTER2+49)
+                        y=CENTER2+49;
+                if( y < CENTER2-49)
+                        y=CENTER2-49;
+                map[x+40][y]+=chg;
+                }
+        for(x=0;x<gcmaxsamples;x++)
+                {
+                y=(c9[ref-x]/c9[ref]-1.0)*mapscale[7] +CENTER2;
+                if(y > CENTER2+49)
+                        y=CENTER2+49;
+                if( y < CENTER2-49)
+                        y=CENTER2-49;
+                map[x+60][y]+=chg;
+                }
+
+        for(x=0;x<gcmaxsamples;x++)
+                {
+                y=(c10[ref-x]/c10[ref]-1.0)*mapscale[8] +CENTER3;
+                if(y > CENTER3+49)
+                        y=CENTER3+49;
+                if( y < CENTER3-49)
+                        y=CENTER3-49;
+                map[x][y]+=chg;
+                }
+        for(x=0;x<gcmaxsamples;x++)
+                {
+                y=(c11[ref-x]/c11[ref]-1.0)*mapscale[9] +CENTER3;
+                if(y > CENTER3+49)
+                        y=CENTER3+49;
+                if( y < CENTER3-49)
+                        y=CENTER3-49;
+                map[x+20][y]+=chg;
+                }
+        for(x=0;x<gcmaxsamples;x++)
+                {
+                y=(c12[ref-x]/c12[ref]-1.0)*mapscale[10] +CENTER3;
+                if(y > CENTER3+49)
+                        y=CENTER3+49;
+                if( y < CENTER3-49)
+                        y=CENTER3-49;
+                map[x+40][y]+=chg;
+                }
+        for(x=0;x<gcmaxsamples;x++)
+                {
+                y=(c13[ref-x]/c13[ref]-1.0)*mapscale[11] +CENTER3;
+                if(y > CENTER3+49)
+                        y=CENTER3+49;
+                if( y < CENTER3-49)
+                        y=CENTER3-49;
+                map[x+60][y]+=chg;
+                }
+        for(x=0;x<gcmaxsamples;x++)
+                {
+                y=(c14[ref-x]/c14[ref]-1.0)*mapscale[12] +CENTER4;
+                if(y > CENTER4+49)
+                        y=CENTER4+49;
+                if( y < CENTER4-49)
+                        y=CENTER4-49;
+                map[x][y]+=chg;
+                }
+        for(x=0;x<gcmaxsamples;x++)
+                {
+                y=(c15[ref-x]/c15[ref]-1.0)*mapscale[13] +CENTER4;
+                if(y > CENTER4+49)
+                        y=CENTER4+49;
+                if( y < CENTER4-49)
+                        y=CENTER4-49;
+                map[x+20][y]+=chg;
+                }
+        for(x=0;x<gcmaxsamples;x++)
+                {
+                y=(c16[ref-x]/c16[ref]-1.0)*mapscale[14] +CENTER4;
+                if(y > CENTER4+49)
+                        y=CENTER4+49;
+                if( y < CENTER4-49)
+                        y=CENTER4-49;
+                map[x+40][y]+=chg;
+                }
+        for(x=0;x<gcmaxsamples;x++)
+                {
+                y=(c17[ref-x]/c17[ref]-1.0)*mapscale[15] +CENTER4;
+                if(y > CENTER4+49)
+                        y=CENTER4+49;
+                if( y < CENTER4-49)
+                        y=CENTER4-49;
+                map[x+60][y]+=chg;
+                }
+
+        for(x=0;x<gcmaxsamples;x++)
+                {
+                y=(c18[ref-x]/c18[ref]-1.0)*mapscale[16] +CENTER1;
+                if(y > CENTER1+49)
+                        y=CENTER1+49;
+                if( y < CENTER1-49)
+                        y=CENTER1-49;
+                map[x+80][y]+=chg;
+                }
+        for(x=0;x<gcmaxsamples;x++)
+                {
+                y=(c19[ref-x]/c19[ref]-1.0)*mapscale[17] +CENTER1;
+                if(y > CENTER1+49)
+                        y=CENTER1+49;
+                if( y < CENTER1-49)
+                        y=CENTER1-49;
+                map[x+100][y]+=chg;
+                }
+        for(x=0;x<gcmaxsamples;x++)
+                {
+                y=(c20[ref-x]/c20[ref]-1.0)*mapscale[18] +CENTER1;
+                if(y > CENTER1+49)
+                        y=CENTER1+49;
+                if( y < CENTER1-49)
+                        y=CENTER1-49;
+                map[x+120][y]+=chg;
+                }
+        for(x=0;x<gcmaxsamples;x++)
+                {
+                y=(c21[ref-x]/c21[ref]-1.0)*mapscale[19] +CENTER1;
+                if(y > CENTER1+49)
+                        y=CENTER1+49;
+                if( y < CENTER1-49)
+                        y=CENTER1-49;
+                map[x+140][y]+=chg;
+                }
+        for(x=0;x<gcmaxsamples;x++)
+                {
+                y=(c22[ref-x]/c22[ref]-1.0)*mapscale[20] +CENTER2;
+                if(y > CENTER2+49)
+                        y=CENTER2+49;
+                if( y < CENTER2-49)
+                        y=CENTER2-49;
+                map[x+80][y]+=chg;
+                }
+        for(x=0;x<gcmaxsamples;x++)
+                {
+                y=(c23[ref-x]/c23[ref]-1.0)*mapscale[21] +CENTER2;
+                if(y > CENTER2+49)
+                        y=CENTER2+49;
+                if( y < CENTER2-49)
+                        y=CENTER2-49;
+                map[x+100][y]+=chg;
+                }
+        for(x=0;x<gcmaxsamples;x++)
+                {
+                y=(c24[ref-x]/c24[ref]-1.0)*mapscale[22] +CENTER2;
+                if(y > CENTER2+49)
+                        y=CENTER2+49;
+                if( y < CENTER2-49)
+                        y=CENTER2-49;
+                map[x+120][y]+=chg;
+                }
+        for(x=0;x<gcmaxsamples;x++)
+                {
+                y=(c25[ref-x]/c25[ref]-1.0)*mapscale[23] +CENTER2;
+                if(y > CENTER2+49)
+                        y=CENTER2+49;
+                if( y < CENTER2-49)
+                        y=CENTER2-49;
+                map[x+140][y]+=chg;
+                }
+
+        for(x=0;x<gcmaxsamples;x++)
+                {
+                y=(c26[ref-x]/c26[ref]-1.0)*mapscale[24] +CENTER3;
+                if(y > CENTER3+49)
+                        y=CENTER3+49;
+                if( y < CENTER3-49)
+                        y=CENTER3-49;
+                map[x+80][y]+=chg;
+                }
+        for(x=0;x<gcmaxsamples;x++)
+                {
+                y=(c27[ref-x]/c27[ref]-1.0)*mapscale[25] +CENTER3;
+                if(y > CENTER3+49)
+                        y=CENTER3+49;
+                if( y < CENTER3-49)
+                        y=CENTER3-49;
+                map[x+100][y]+=chg;
+                }
+        for(x=0;x<gcmaxsamples;x++)
+                {
+                y=(c28[ref-x]/c28[ref]-1.0)*mapscale[26] +CENTER3;
+                if(y > CENTER3+49)
+                        y=CENTER3+49;
+                if( y < CENTER3-49)
+                        y=CENTER3-49;
+                map[x+120][y]+=chg;
+                }
+        for(x=0;x<gcmaxsamples;x++)
+                {
+                y=(c29[ref-x]/c29[ref]-1.0)*mapscale[27] +CENTER3;
+                if(y > CENTER3+49)
+                        y=CENTER3+49;
+                if( y < CENTER3-49)
+                        y=CENTER3-49;
+                map[x+140][y]+=chg;
+                }
+        for(x=0;x<gcmaxsamples;x++)
+                {
+                y=(c30[ref-x]/c30[ref]-1.0)*mapscale[28] +CENTER4;
+                if(y > CENTER4+49)
+                        y=CENTER4+49;
+                if( y < CENTER4-49)
+                        y=CENTER4-49;
+                map[x+80][y]+=chg;
+                }
+        for(x=0;x<gcmaxsamples;x++)
+                {
+                y=(c31[ref-x]/c31[ref]-1.0)*mapscale[29] +CENTER4;
+                if(y > CENTER4+49)
+                        y=CENTER4+49;
+                if( y < CENTER4-49)
+                        y=CENTER4-49;
+                map[x+100][y]+=chg;
+                }
+        for(x=0;x<gcmaxsamples;x++)
+                {
+                y=(c32[ref-x]/c32[ref]-1.0)*mapscale[30] +CENTER4;
+                if(y > CENTER4+49)
+                        y=CENTER4+49;
+                if( y < CENTER4-49)
+                        y=CENTER4-49;
+                map[x+120][y]+=chg;
+                }
+        for(x=0;x<gcmaxsamples;x++)
+                {
+                y=(c33[ref-x]/c33[ref]-1.0)*mapscale[31] +CENTER4;
+                if(y > CENTER4+49)
+                        y=CENTER4+49;
+                if( y < CENTER4-49)
+                        y=CENTER4-49;
+                map[x+140][y]+=chg;
+                }
+
+
+        for(x=0;x<gcmaxsamples;x++)
+                {
+                y=(c34[ref-x]/c34[ref]-1.0)*mapscale[32] +CENTER1;
+                if(y > CENTER1+49)
+                        y=CENTER1+49;
+                if( y < CENTER1-49)
+                        y=CENTER1-49;
+                map[x+160][y]+=chg;
+                }
+        for(x=0;x<gcmaxsamples;x++)
+                {
+                y=(c35[ref-x]/c35[ref]-1.0)*mapscale[33] +CENTER1;
+                if(y > CENTER1+49)
+                        y=CENTER1+49;
+                if( y < CENTER1-49)
+                        y=CENTER1-49;
+                map[x+180][y]+=chg;
+                }
+        for(x=0;x<gcmaxsamples;x++)
+                {
+                y=(c36[ref-x]/c36[ref]-1.0)*mapscale[34] +CENTER1;
+                if(y > CENTER1+49)
+                        y=CENTER1+49;
+                if( y < CENTER1-49)
+                        y=CENTER1-49;
+                map[x+200][y]+=chg;
+                }
+        for(x=0;x<gcmaxsamples;x++)
+                {
+                y=(c37[ref-x]/c37[ref]-1.0)*mapscale[35] +CENTER1;
+                if(y > CENTER1+49)
+                        y=CENTER1+49;
+                if( y < CENTER1-49)
+                        y=CENTER1-49;
+                map[x+220][y]+=chg;
+                }
+        for(x=0;x<gcmaxsamples;x++)
+                {
+                y=(c38[ref-x]/c38[ref]-1.0)*mapscale[36] +CENTER2;
+                if(y > CENTER2+49)
+                        y=CENTER2+49;
+                if( y < CENTER2-49)
+                        y=CENTER2-49;
+                map[x+160][y]+=chg;
+                }
+        for(x=0;x<gcmaxsamples;x++)
+                {
+                y=(c39[ref-x]/c39[ref]-1.0)*mapscale[37] +CENTER2;
+                if(y > CENTER2+49)
+                        y=CENTER2+49;
+                if( y < CENTER2-49)
+                        y=CENTER2-49;
+                map[x+180][y]+=chg;
+                }
+        for(x=0;x<gcmaxsamples;x++)
+                {
+                y=(c40[ref-x]/c40[ref]-1.0)*mapscale[38] +CENTER2;
+                if(y > CENTER2+49)
+                        y=CENTER2+49;
+                if( y < CENTER2-49)
+                        y=CENTER2-49;
+                map[x+200][y]+=chg;
+                }
+        for(x=0;x<gcmaxsamples;x++)
+                {
+                y=(c41[ref-x]/c41[ref]-1.0)*mapscale[39] +CENTER2;
+                if(y > CENTER2+49)
+                        y=CENTER2+49;
+                if( y < CENTER2-49)
+                        y=CENTER2-49;
+                map[x+220][y]+=chg;
+                }
+
+        for(x=0;x<gcmaxsamples;x++)
+                {
+                y=(c42[ref-x]/c42[ref]-1.0)*mapscale[40] +CENTER3;
+                if(y > CENTER3+49)
+                        y=CENTER3+49;
+                if( y < CENTER3-49)
+                        y=CENTER3-49;
+                map[x+160][y]+=chg;
+                }
+        for(x=0;x<gcmaxsamples;x++)
+                {
+                y=(c43[ref-x]/c43[ref]-1.0)*mapscale[41] +CENTER3;
+                if(y > CENTER3+49)
+                        y=CENTER3+49;
+                if( y < CENTER3-49)
+                        y=CENTER3-49;
+                map[x+180][y]+=chg;
+                }
+        for(x=0;x<gcmaxsamples;x++)
+                {
+                y=(c44[ref-x]/c44[ref]-1.0)*mapscale[42] +CENTER3;
+                if(y > CENTER3+49)
+                        y=CENTER3+49;
+                if( y < CENTER3-49)
+                        y=CENTER3-49;
+                map[x+200][y]+=chg;
+                }
+        for(x=0;x<gcmaxsamples;x++)
+                {
+                y=(c45[ref-x]/c45[ref]-1.0)*mapscale[43] +CENTER3;
+                if(y > CENTER3+49)
+                        y=CENTER3+49;
+                if( y < CENTER3-49)
+                        y=CENTER3-49;
+                map[x+220][y]+=chg;
+                }
+        for(x=0;x<gcmaxsamples;x++)
+                {
+                y=(c46[ref-x]/c46[ref]-1.0)*mapscale[44] +CENTER4;
+                if(y > CENTER4+49)
+                        y=CENTER4+49;
+                if( y < CENTER4-49)
+                        y=CENTER4-49;
+                map[x+160][y]+=chg;
+                }
+        for(x=0;x<gcmaxsamples;x++)
+                {
+                y=(c47[ref-x]/c47[ref]-1.0)*mapscale[45] +CENTER4;
+                if(y > CENTER4+49)
+                        y=CENTER4+49;
+                if( y < CENTER4-49)
+                        y=CENTER4-49;
+                map[x+180][y]+=chg;
+                }
+        for(x=0;x<gcmaxsamples;x++)
+                {
+                y=(c48[ref-x]/c48[ref]-1.0)*mapscale[46] +CENTER4;
+                if(y > CENTER4+49)
+                        y=CENTER4+49;
+                if( y < CENTER4-49)
+                        y=CENTER4-49;
+                map[x+200][y]+=chg;
+                }
+        for(x=0;x<gcmaxsamples;x++)
+                {
+                y=(c49[ref-x]/c49[ref]-1.0)*mapscale[47] +CENTER4;
+                if(y > CENTER4+49)
+                        y=CENTER4+49;
+                if( y < CENTER4-49)
+                        y=CENTER4-49;
+                map[x+220][y]+=chg;
+                }
+
+
+
+
+        //   +++++++++++++++++++++++++
+
+        for(x=0;x<gcmaxsamples;x++)
+                {
+                y=(c50[ref-x]/c50[ref]-1.0)*mapscale[48] +CENTER5;
+                if(y > CENTER5+49)
+                        y=CENTER5+49;
+                if( y < CENTER5-49)
+                        y=CENTER5-49;
+                map[x][y]+=chg;
+                }
+        for(x=0;x<gcmaxsamples;x++)
+                {
+                y=(c51[ref-x]/c51[ref]-1.0)*mapscale[49] +CENTER5;
+                if(y > CENTER5+49)
+                        y=CENTER5+49;
+                if( y < CENTER5-49)
+                        y=CENTER5-49;
+                map[x+20][y]+=chg;
+                }
+        for(x=0;x<gcmaxsamples;x++)
+                {
+                y=(c52[ref-x]/c52[ref]-1.0)*mapscale[50] +CENTER5;
+                if(y > CENTER5+49)
+                        y=CENTER5+49;
+                if( y < CENTER5-49)
+                        y=CENTER5-49;
+                map[x+40][y]+=chg;
+                }
+        for(x=0;x<gcmaxsamples;x++)
+                {
+                y=(c53[ref-x]/c53[ref]-1.0)*mapscale[51] +CENTER5;
+                if(y > CENTER5+49)
+                        y=CENTER5+49;
+                if( y < CENTER5-49)
+                        y=CENTER5-49;
+                map[x+60][y]+=chg;
+                }
+        for(x=0;x<gcmaxsamples;x++)
+                {
+                y=(c54[ref-x]/c54[ref]-1.0)*mapscale[52] +CENTER6;
+                if(y > CENTER6+49)
+                        y=CENTER6+49;
+                if( y < CENTER6-49)
+                        y=CENTER6-49;
+                map[x][y]+=chg;
+                }
+        for(x=0;x<gcmaxsamples;x++)
+                {
+                y=(c55[ref-x]/c55[ref]-1.0)*mapscale[53] +CENTER6;
+                if(y > CENTER6+49)
+                        y=CENTER6+49;
+                if( y < CENTER6-49)
+                        y=CENTER6-49;
+                map[x+20][y]+=chg;
+                }
+        for(x=0;x<gcmaxsamples;x++)
+                {
+                y=(c56[ref-x]/c56[ref]-1.0)*mapscale[54] +CENTER6;
+                if(y > CENTER6+49)
+                        y=CENTER6+49;
+                if( y < CENTER6-49)
+                        y=CENTER6-49;
+                map[x+40][y]+=chg;
+                }
+        for(x=0;x<gcmaxsamples;x++)
+                {
+                y=(c57[ref-x]/c57[ref]-1.0)*mapscale[55] +CENTER6;
+                if(y > CENTER6+49)
+                        y=CENTER6+49;
+                if( y < CENTER6-49)
+                        y=CENTER6-49;
+                map[x+60][y]+=chg;
+                }
+
+        for(x=0;x<gcmaxsamples;x++)
+                {
+                y=(c58[ref-x]/c58[ref]-1.0)*mapscale[0] +CENTER7;
+                if(y > CENTER7+49)
+                        y=CENTER7+49;
+                if( y < CENTER7-49)
+                        y=CENTER7-49;
+                map[x][y]+=chg;
+                }
+        for(x=0;x<gcmaxsamples;x++)
+                {
+                y=(c59[ref-x]/c59[ref]-1.0)*mapscale[0] +CENTER7;
+                if(y > CENTER7+49)
+                        y=CENTER7+49;
+                if( y < CENTER7-49)
+                        y=CENTER7-49;
+                map[x+20][y]+=chg;
+                }
+        for(x=0;x<gcmaxsamples;x++)
+                {
+                y=(c60[ref-x]/c60[ref]-1.0)*mapscale[0] +CENTER7;
+                if(y > CENTER7+49)
+                        y=CENTER7+49;
+                if( y < CENTER7-49)
+                        y=CENTER7-49;
+                map[x+40][y]+=chg;
+                }
+        for(x=0;x<gcmaxsamples;x++)
+                {
+                y=(c61[ref-x]/c61[ref]-1.0)*mapscale[0] +CENTER7;
+                if(y > CENTER7+49)
+                        y=CENTER7+49;
+                if( y < CENTER7-49)
+                        y=CENTER7-49;
+                map[x+60][y]+=chg;
+                }
+        for(x=0;x<gcmaxsamples;x++)
+                {
+                y=(c62[ref-x]/c62[ref]-1.0)*mapscale[0] +CENTER8;
+                if(y > CENTER8+49)
+                        y=CENTER8+49;
+                if( y < CENTER8-49)
+                        y=CENTER8-49;
+                map[x][y]+=chg;
+                }
+        for(x=0;x<gcmaxsamples;x++)
+                {
+                y=(c63[ref-x]/c63[ref]-1.0)*mapscale[0] +CENTER8;
+                if(y > CENTER8+49)
+                        y=CENTER8+49;
+                if( y < CENTER8-49)
+                        y=CENTER8-49;
+                map[x+20][y]+=chg;
+                }
+        for(x=0;x<gcmaxsamples;x++)
+                {
+                y=(c64[ref-x]/c64[ref]-1.0)*mapscale[0] +CENTER8;
+                if(y > CENTER8+49)
+                        y=CENTER8+49;
+                if( y < CENTER8-49)
+                        y=CENTER8-49;
+                map[x+40][y]+=chg;
+                }
+        for(x=0;x<gcmaxsamples;x++)
+                {
+                y=(c65[ref-x]/c65[ref]-1.0)*mapscale[0] +CENTER8;
+                if(y > CENTER8+49)
+                        y=CENTER8+49;
+                if( y < CENTER8-49)
+                        y=CENTER8-49;
+                map[x+60][y]+=chg;
+                }
+
+        for(x=0;x<gcmaxsamples;x++)
+                {
+                y=(c66[ref-x]/c66[ref]-1.0)*mapscale[0] +CENTER5;
+                if(y > CENTER5+49)
+                        y=CENTER5+49;
+                if( y < CENTER5-49)
+                        y=CENTER5-49;
+                map[x+80][y]+=chg;
+                }
+        for(x=0;x<gcmaxsamples;x++)
+                {
+                y=(c67[ref-x]/c67[ref]-1.0)*mapscale[0] +CENTER5;
+                if(y > CENTER5+49)
+                        y=CENTER5+49;
+                if( y < CENTER5-49)
+                        y=CENTER5-49;
+                map[x+100][y]+=chg;
+                }
+        for(x=0;x<gcmaxsamples;x++)
+                {
+                y=(c68[ref-x]/c68[ref]-1.0)*mapscale[0] +CENTER5;
+                if(y > CENTER5+49)
+                        y=CENTER5+49;
+                if( y < CENTER5-49)
+                        y=CENTER5-49;
+                map[x+120][y]+=chg;
+                }
+        for(x=0;x<gcmaxsamples;x++)
+                {
+                y=(c69[ref-x]/c69[ref]-1.0)*mapscale[0] +CENTER5;
+                if(y > CENTER5+49)
+                        y=CENTER5+49;
+                if( y < CENTER5-49)
+                        y=CENTER5-49;
+                map[x+140][y]+=chg;
+                }
+        for(x=0;x<gcmaxsamples;x++)
+                {
+                y=(c70[ref-x]/c70[ref]-1.0)*mapscale[0] +CENTER6;
+                if(y > CENTER6+49)
+                        y=CENTER6+49;
+                if( y < CENTER6-49)
+                        y=CENTER6-49;
+                map[x+80][y]+=chg;
+                }
+        for(x=0;x<gcmaxsamples;x++)
+                {
+                y=(c71[ref-x]/c71[ref]-1.0)*mapscale[0] +CENTER6;
+                if(y > CENTER6+49)
+                        y=CENTER6+49;
+                if( y < CENTER6-49)
+                        y=CENTER6-49;
+                map[x+100][y]+=chg;
+                }
+        for(x=0;x<gcmaxsamples;x++)
+                {
+                y=(c72[ref-x]/c72[ref]-1.0)*mapscale[0] +CENTER6;
+                if(y > CENTER6+49)
+                        y=CENTER6+49;
+                if( y < CENTER6-49)
+                        y=CENTER6-49;
+                map[x+120][y]+=chg;
+                }
+        for(x=0;x<gcmaxsamples;x++)
+                {
+                y=(c73[ref-x]/c73[ref]-1.0)*mapscale[0] +CENTER6;
+                if(y > CENTER6+49)
+                        y=CENTER6+49;
+                if( y < CENTER6-49)
+                        y=CENTER6-49;
+                map[x+140][y]+=chg;
+                }
+
+        for(x=0;x<gcmaxsamples;x++)
+                {
+                y=(c74[ref-x]/c74[ref]-1.0)*mapscale[0] +CENTER7;
+                if(y > CENTER7+49)
+                        y=CENTER7+49;
+                if( y < CENTER7-49)
+                        y=CENTER7-49;
+                map[x+80][y]+=chg;
+                }
+        for(x=0;x<gcmaxsamples;x++)
+                {
+                y=(c75[ref-x]/c75[ref]-1.0)*mapscale[0] +CENTER7;
+                if(y > CENTER7+49)
+                        y=CENTER7+49;
+                if( y < CENTER7-49)
+                        y=CENTER7-49;
+                map[x+100][y]+=chg;
+                }
+        for(x=0;x<gcmaxsamples;x++)
+                {
+                y=(c76[ref-x]/c76[ref]-1.0)*mapscale[0] +CENTER7;
+                if(y > CENTER7+49)
+                        y=CENTER7+49;
+                if( y < CENTER7-49)
+                        y=CENTER7-49;
+                map[x+120][y]+=chg;
+                }
+        for(x=0;x<gcmaxsamples;x++)
+                {
+                y=(c77[ref-x]/c77[ref]-1.0)*mapscale[0] +CENTER7;
+                if(y > CENTER7+49)
+                        y=CENTER7+49;
+                if( y < CENTER7-49)
+                        y=CENTER7-49;
+                map[x+140][y]+=chg;
+                }
+        for(x=0;x<gcmaxsamples;x++)
+                {
+                y=(c78[ref-x]/c78[ref]-1.0)*mapscale[0] +CENTER8;
+                if(y > CENTER8+49)
+                        y=CENTER8+49;
+                if( y < CENTER8-49)
+                        y=CENTER8-49;
+                map[x+80][y]+=chg;
+                }
+        for(x=0;x<gcmaxsamples;x++)
+                {
+                y=(c79[ref-x]/c79[ref]-1.0)*mapscale[0] +CENTER8;
+                if(y > CENTER8+49)
+                        y=CENTER8+49;
+                if( y < CENTER8-49)
+                        y=CENTER8-49;
+                map[x+100][y]+=chg;
+                }
+        for(x=0;x<gcmaxsamples;x++)
+                {
+                y=(c80[ref-x]/c80[ref]-1.0)*mapscale[0] +CENTER8;
+                if(y > CENTER8+49)
+                        y=CENTER8+49;
+                if( y < CENTER8-49)
+                        y=CENTER8-49;
+                map[x+120][y]+=chg;
+                }
+        for(x=0;x<gcmaxsamples;x++)
+                {
+                y=(c81[ref-x]/c81[ref]-1.0)*mapscale[0] +CENTER8;
+                if(y > CENTER8+49)
+                        y=CENTER8+49;
+                if( y < CENTER8-49)
+                        y=CENTER8-49;
+                map[x+140][y]+=chg;
+                }
+
+
+        for(x=0;x<gcmaxsamples;x++)
+                {
+                y=(c82[ref-x]/c82[ref]-1.0)*mapscale[0] +CENTER5;
+                if(y > CENTER5+49)
+                        y=CENTER5+49;
+                if( y < CENTER5-49)
+                        y=CENTER5-49;
+                map[x+160][y]+=chg;
+                }
+        for(x=0;x<gcmaxsamples;x++)
+                {
+                y=(c83[ref-x]/c83[ref]-1.0)*mapscale[0] +CENTER5;
+                if(y > CENTER5+49)
+                        y=CENTER5+49;
+                if( y < CENTER5-49)
+                        y=CENTER5-49;
+                map[x+180][y]+=chg;
+                }
+        for(x=0;x<gcmaxsamples;x++)
+                {
+                y=(c84[ref-x]/c84[ref]-1.0)*mapscale[0] +CENTER5;
+                if(y > CENTER5+49)
+                        y=CENTER5+49;
+                if( y < CENTER5-49)
+                        y=CENTER5-49;
+                map[x+200][y]+=chg;
+                }
+        for(x=0;x<gcmaxsamples;x++)
+                {
+                y=(c85[ref-x]/c85[ref]-1.0)*mapscale[0] +CENTER5;
+                if(y > CENTER5+49)
+                        y=CENTER5+49;
+                if( y < CENTER5-49)
+                        y=CENTER5-49;
+                map[x+220][y]+=chg;
+                }
+        for(x=0;x<gcmaxsamples;x++)
+                {
+                y=(c86[ref-x]/c86[ref]-1.0)*mapscale[0] +CENTER6;
+                if(y > CENTER6+49)
+                        y=CENTER6+49;
+                if( y < CENTER6-49)
+                        y=CENTER6-49;
+                map[x+160][y]+=chg;
+                }
+        for(x=0;x<gcmaxsamples;x++)
+                {
+                y=(c87[ref-x]/c87[ref]-1.0)*mapscale[0] +CENTER6;
+                if(y > CENTER6+49)
+                        y=CENTER6+49;
+                if( y < CENTER6-49)
+                        y=CENTER6-49;
+                map[x+180][y]+=chg;
+                }
+        for(x=0;x<gcmaxsamples;x++)
+                {
+                y=(c88[ref-x]/c88[ref]-1.0)*mapscale[0] +CENTER6;
+                if(y > CENTER6+49)
+                        y=CENTER6+49;
+                if( y < CENTER6-49)
+                        y=CENTER6-49;
+                map[x+200][y]+=chg;
+                }
+        for(x=0;x<gcmaxsamples;x++)
+                {
+                y=(c89[ref-x]/c89[ref]-1.0)*mapscale[0] +CENTER6;
+                if(y > CENTER6+49)
+                        y=CENTER6+49;
+                if( y < CENTER6-49)
+                        y=CENTER6-49;
+                map[x+220][y]+=chg;
+                }
+
+        for(x=0;x<gcmaxsamples;x++)
+                {
+                y=(c90[ref-x]/c90[ref]-1.0)*mapscale[0] +CENTER7;
+                if(y > CENTER7+49)
+                        y=CENTER7+49;
+                if( y < CENTER7-49)
+                        y=CENTER7-49;
+                map[x+160][y]+=chg;
+                }
+        for(x=0;x<gcmaxsamples;x++)
+                {
+                y=(c91[ref-x]/c91[ref]-1.0)*mapscale[0] +CENTER7;
+                if(y > CENTER7+49)
+                        y=CENTER7+49;
+                if( y < CENTER7-49)
+                        y=CENTER7-49;
+                map[x+180][y]+=chg;
+                }
+        for(x=0;x<gcmaxsamples;x++)
+                {
+                y=(c92[ref-x]/c92[ref]-1.0)*mapscale[0] +CENTER7;
+                if(y > CENTER7+49)
+                        y=CENTER7+49;
+                if( y < CENTER7-49)
+                        y=CENTER7-49;
+                map[x+200][y]+=chg;
+                }
+        for(x=0;x<gcmaxsamples;x++)
+                {
+                y=(c93[ref-x]/c93[ref]-1.0)*mapscale[0] +CENTER7;
+                if(y > CENTER7+49)
+                        y=CENTER7+49;
+                if( y < CENTER7-49)
+                        y=CENTER7-49;
+                map[x+220][y]+=chg;
+                }
+        for(x=0;x<gcmaxsamples;x++)
+                {
+                y=(c94[ref-x]/c94[ref]-1.0)*mapscale[0] +CENTER8;
+                if(y > CENTER8+49)
+                        y=CENTER8+49;
+                if( y < CENTER8-49)
+                        y=CENTER8-49;
+                map[x+160][y]+=chg;
+                }
+        for(x=0;x<gcmaxsamples;x++)
+                {
+                y=(c95[ref-x]/c95[ref]-1.0)*mapscale[0] +CENTER8;
+                if(y > CENTER8+49)
+                        y=CENTER8+49;
+                if( y < CENTER8-49)
+                        y=CENTER8-49;
+                map[x+180][y]+=chg;
+                }
+        for(x=0;x<gcmaxsamples;x++)
+                {
+                y=(c96[ref-x]/c96[ref]-1.0)*mapscale[0] +CENTER8;
+                if(y > CENTER8+49)
+                        y=CENTER8+49;
+                if( y < CENTER8-49)
+                        y=CENTER8-49;
+                map[x+200][y]+=chg;
+                }
+        for(x=0;x<gcmaxsamples;x++)
+                {
+                y=(c97[ref-x]/c97[ref]-1.0)*mapscale[0] +CENTER8;
+                if(y > CENTER8+49)
+                        y=CENTER8+49;
+                if( y < CENTER8-49)
+                        y=CENTER8-49;
+                map[x+220][y]+=chg;
+                }
+
+
+
+
+
+
+
+        return(1);
+        }
+
+ //+++++++++++++++++++++++++++++++
+
+
+
+ 
+
+fill_map2(ref)  // loss, sum 1.0 into cells
+	int ref;
+	{
+	int x,y;
+        float chg=1.0;
+        for(x=0;x<gcmaxsamples;x++)
+                {
+                y=(c2[ref-x]/c2[ref]-1.0)*mapscale[0] +CENTER1;
+                if(y > CENTER1+49)
+                        y=CENTER1+49;
+                if( y < CENTER1-49)
+                        y=CENTER1-49;
+                map2[x][y]+=chg;
+                }
+        for(x=0;x<gcmaxsamples;x++)
+                {
+                y=(c3[ref-x]/c3[ref]-1.0)*mapscale[1] +CENTER1;
+                if(y > CENTER1+49)
+                        y=CENTER1+49;
+                if( y < CENTER1-49)
+                        y=CENTER1-49;
+                map2[x+20][y]+=chg;
+                }
+        for(x=0;x<gcmaxsamples;x++)
+                {
+                y=(c4[ref-x]/c4[ref]-1.0)*mapscale[2] +CENTER1;
+                if(y > CENTER1+49)
+                        y=CENTER1+49;
+                if( y < CENTER1-49)
+                        y=CENTER1-49;
+                map2[x+40][y]+=chg;
+                }
+        for(x=0;x<gcmaxsamples;x++)
+                {
+                y=(c5[ref-x]/c5[ref]-1.0)*mapscale[3] +CENTER1;
+                if(y > CENTER1+49)
+                        y=CENTER1+49;
+                if( y < CENTER1-49)
+                        y=CENTER1-49;
+                map2[x+60][y]+=chg;
+                }
+        for(x=0;x<gcmaxsamples;x++)
+                {
+                y=(c6[ref-x]/c6[ref]-1.0)*mapscale[4] +CENTER2;
+                if(y > CENTER2+49)
+                        y=CENTER2+49;
+                if( y < CENTER2-49)
+                        y=CENTER2-49;
+                map2[x][y]+=chg;
+                }
+        for(x=0;x<gcmaxsamples;x++)
+                {
+                y=(c7[ref-x]/c7[ref]-1.0)*mapscale[5] +CENTER2;
+                if(y > CENTER2+49)
+                        y=CENTER2+49;
+                if( y < CENTER2-49)
+                        y=CENTER2-49;
+                map2[x+20][y]+=chg;
+                }
+        for(x=0;x<gcmaxsamples;x++)
+                {
+                y=(c8[ref-x]/c8[ref]-1.0)*mapscale[6] +CENTER2;
+                if(y > CENTER2+49)
+                        y=CENTER2+49;
+                if( y < CENTER2-49)
+                        y=CENTER2-49;
+                map2[x+40][y]+=chg;
+                }
+        for(x=0;x<gcmaxsamples;x++)
+                {
+                y=(c9[ref-x]/c9[ref]-1.0)*mapscale[7] +CENTER2;
+                if(y > CENTER2+49)
+                        y=CENTER2+49;
+                if( y < CENTER2-49)
+                        y=CENTER2-49;
+                map2[x+60][y]+=chg;
+                }
+
+        for(x=0;x<gcmaxsamples;x++)
+                {
+                y=(c10[ref-x]/c10[ref]-1.0)*mapscale[8] +CENTER3;
+                if(y > CENTER3+49)
+                        y=CENTER3+49;
+                if( y < CENTER3-49)
+                        y=CENTER3-49;
+                map2[x][y]+=chg;
+                }
+        for(x=0;x<gcmaxsamples;x++)
+                {
+                y=(c11[ref-x]/c11[ref]-1.0)*mapscale[9] +CENTER3;
+                if(y > CENTER3+49)
+                        y=CENTER3+49;
+                if( y < CENTER3-49)
+                        y=CENTER3-49;
+                map2[x+20][y]+=chg;
+                }
+        for(x=0;x<gcmaxsamples;x++)
+                {
+                y=(c12[ref-x]/c12[ref]-1.0)*mapscale[10] +CENTER3;
+                if(y > CENTER3+49)
+                        y=CENTER3+49;
+                if( y < CENTER3-49)
+                        y=CENTER3-49;
+                map2[x+40][y]+=chg;
+                }
+        for(x=0;x<gcmaxsamples;x++)
+                {
+                y=(c13[ref-x]/c13[ref]-1.0)*mapscale[11] +CENTER3;
+                if(y > CENTER3+49)
+                        y=CENTER3+49;
+                if( y < CENTER3-49)
+                        y=CENTER3-49;
+                map2[x+60][y]+=chg;
+                }
+        for(x=0;x<gcmaxsamples;x++)
+                {
+                y=(c14[ref-x]/c14[ref]-1.0)*mapscale[12] +CENTER4;
+                if(y > CENTER4+49)
+                        y=CENTER4+49;
+                if( y < CENTER4-49)
+                        y=CENTER4-49;
+                map2[x][y]+=chg;
+                }
+        for(x=0;x<gcmaxsamples;x++)
+                {
+                y=(c15[ref-x]/c15[ref]-1.0)*mapscale[13] +CENTER4;
+                if(y > CENTER4+49)
+                        y=CENTER4+49;
+                if( y < CENTER4-49)
+                        y=CENTER4-49;
+                map2[x+20][y]+=chg;
+                }
+        for(x=0;x<gcmaxsamples;x++)
+                {
+                y=(c16[ref-x]/c16[ref]-1.0)*mapscale[14] +CENTER4;
+                if(y > CENTER4+49)
+                        y=CENTER4+49;
+                if( y < CENTER4-49)
+                        y=CENTER4-49;
+                map2[x+40][y]+=chg;
+                }
+        for(x=0;x<gcmaxsamples;x++)
+                {
+                y=(c17[ref-x]/c17[ref]-1.0)*mapscale[15] +CENTER4;
+                if(y > CENTER4+49)
+                        y=CENTER4+49;
+                if( y < CENTER4-49)
+                        y=CENTER4-49;
+                map2[x+60][y]+=chg;
+                }
+
+        for(x=0;x<gcmaxsamples;x++)
+                {
+                y=(c18[ref-x]/c18[ref]-1.0)*mapscale[16] +CENTER1;
+                if(y > CENTER1+49)
+                        y=CENTER1+49;
+                if( y < CENTER1-49)
+                        y=CENTER1-49;
+                map2[x+80][y]+=chg;
+                }
+        for(x=0;x<gcmaxsamples;x++)
+                {
+                y=(c19[ref-x]/c19[ref]-1.0)*mapscale[17] +CENTER1;
+                if(y > CENTER1+49)
+                        y=CENTER1+49;
+                if( y < CENTER1-49)
+                        y=CENTER1-49;
+                map2[x+100][y]+=chg;
+                }
+        for(x=0;x<gcmaxsamples;x++)
+                {
+                y=(c20[ref-x]/c20[ref]-1.0)*mapscale[18] +CENTER1;
+                if(y > CENTER1+49)
+                        y=CENTER1+49;
+                if( y < CENTER1-49)
+                        y=CENTER1-49;
+                map2[x+120][y]+=chg;
+                }
+        for(x=0;x<gcmaxsamples;x++)
+                {
+                y=(c21[ref-x]/c21[ref]-1.0)*mapscale[19] +CENTER1;
+                if(y > CENTER1+49)
+                        y=CENTER1+49;
+                if( y < CENTER1-49)
+                        y=CENTER1-49;
+                map2[x+140][y]+=chg;
+                }
+        for(x=0;x<gcmaxsamples;x++)
+                {
+                y=(c22[ref-x]/c22[ref]-1.0)*mapscale[20] +CENTER2;
+                if(y > CENTER2+49)
+                        y=CENTER2+49;
+                if( y < CENTER2-49)
+                        y=CENTER2-49;
+                map2[x+80][y]+=chg;
+                }
+        for(x=0;x<gcmaxsamples;x++)
+                {
+                y=(c23[ref-x]/c23[ref]-1.0)*mapscale[21] +CENTER2;
+                if(y > CENTER2+49)
+                        y=CENTER2+49;
+                if( y < CENTER2-49)
+                        y=CENTER2-49;
+                map2[x+100][y]+=chg;
+                }
+        for(x=0;x<gcmaxsamples;x++)
+                {
+                y=(c24[ref-x]/c24[ref]-1.0)*mapscale[22] +CENTER2;
+                if(y > CENTER2+49)
+                        y=CENTER2+49;
+                if( y < CENTER2-49)
+                        y=CENTER2-49;
+                map2[x+120][y]+=chg;
+                }
+        for(x=0;x<gcmaxsamples;x++)
+                {
+                y=(c25[ref-x]/c25[ref]-1.0)*mapscale[23] +CENTER2;
+                if(y > CENTER2+49)
+                        y=CENTER2+49;
+                if( y < CENTER2-49)
+                        y=CENTER2-49;
+                map2[x+140][y]+=chg;
+                }
+
+        for(x=0;x<gcmaxsamples;x++)
+                {
+                y=(c26[ref-x]/c26[ref]-1.0)*mapscale[24] +CENTER3;
+                if(y > CENTER3+49)
+                        y=CENTER3+49;
+                if( y < CENTER3-49)
+                        y=CENTER3-49;
+                map2[x+80][y]+=chg;
+                }
+        for(x=0;x<gcmaxsamples;x++)
+                {
+                y=(c27[ref-x]/c27[ref]-1.0)*mapscale[25] +CENTER3;
+                if(y > CENTER3+49)
+                        y=CENTER3+49;
+                if( y < CENTER3-49)
+                        y=CENTER3-49;
+                map2[x+100][y]+=chg;
+                }
+        for(x=0;x<gcmaxsamples;x++)
+                {
+                y=(c28[ref-x]/c28[ref]-1.0)*mapscale[26] +CENTER3;
+                if(y > CENTER3+49)
+                        y=CENTER3+49;
+                if( y < CENTER3-49)
+                        y=CENTER3-49;
+                map2[x+120][y]+=chg;
+                }
+        for(x=0;x<gcmaxsamples;x++)
+                {
+                y=(c29[ref-x]/c29[ref]-1.0)*mapscale[27] +CENTER3;
+                if(y > CENTER3+49)
+                        y=CENTER3+49;
+                if( y < CENTER3-49)
+                        y=CENTER3-49;
+                map2[x+140][y]+=chg;
+                }
+        for(x=0;x<gcmaxsamples;x++)
+                {
+                y=(c30[ref-x]/c30[ref]-1.0)*mapscale[28] +CENTER4;
+                if(y > CENTER4+49)
+                        y=CENTER4+49;
+                if( y < CENTER4-49)
+                        y=CENTER4-49;
+                map2[x+80][y]+=chg;
+                }
+        for(x=0;x<gcmaxsamples;x++)
+                {
+                y=(c31[ref-x]/c31[ref]-1.0)*mapscale[29] +CENTER4;
+                if(y > CENTER4+49)
+                        y=CENTER4+49;
+                if( y < CENTER4-49)
+                        y=CENTER4-49;
+                map2[x+100][y]+=chg;
+                }
+        for(x=0;x<gcmaxsamples;x++)
+                {
+                y=(c32[ref-x]/c32[ref]-1.0)*mapscale[30] +CENTER4;
+                if(y > CENTER4+49)
+                        y=CENTER4+49;
+                if( y < CENTER4-49)
+                        y=CENTER4-49;
+                map2[x+120][y]+=chg;
+                }
+        for(x=0;x<gcmaxsamples;x++)
+                {
+                y=(c33[ref-x]/c33[ref]-1.0)*mapscale[31] +CENTER4;
+                if(y > CENTER4+49)
+                        y=CENTER4+49;
+                if( y < CENTER4-49)
+                        y=CENTER4-49;
+                map2[x+140][y]+=chg;
+                }
+
+
+        for(x=0;x<gcmaxsamples;x++)
+                {
+                y=(c34[ref-x]/c34[ref]-1.0)*mapscale[32] +CENTER1;
+                if(y > CENTER1+49)
+                        y=CENTER1+49;
+                if( y < CENTER1-49)
+                        y=CENTER1-49;
+                map2[x+160][y]+=chg;
+                }
+        for(x=0;x<gcmaxsamples;x++)
+                {
+                y=(c35[ref-x]/c35[ref]-1.0)*mapscale[33] +CENTER1;
+                if(y > CENTER1+49)
+                        y=CENTER1+49;
+                if( y < CENTER1-49)
+                        y=CENTER1-49;
+                map2[x+180][y]+=chg;
+                }
+        for(x=0;x<gcmaxsamples;x++)
+                {
+                y=(c36[ref-x]/c36[ref]-1.0)*mapscale[34] +CENTER1;
+                if(y > CENTER1+49)
+                        y=CENTER1+49;
+                if( y < CENTER1-49)
+                        y=CENTER1-49;
+                map2[x+200][y]+=chg;
+                }
+        for(x=0;x<gcmaxsamples;x++)
+                {
+                y=(c37[ref-x]/c37[ref]-1.0)*mapscale[35] +CENTER1;
+                if(y > CENTER1+49)
+                        y=CENTER1+49;
+                if( y < CENTER1-49)
+                        y=CENTER1-49;
+                map2[x+220][y]+=chg;
+                }
+        for(x=0;x<gcmaxsamples;x++)
+                {
+                y=(c38[ref-x]/c38[ref]-1.0)*mapscale[36] +CENTER2;
+                if(y > CENTER2+49)
+                        y=CENTER2+49;
+                if( y < CENTER2-49)
+                        y=CENTER2-49;
+                map2[x+160][y]+=chg;
+                }
+        for(x=0;x<gcmaxsamples;x++)
+                {
+                y=(c39[ref-x]/c39[ref]-1.0)*mapscale[37] +CENTER2;
+                if(y > CENTER2+49)
+                        y=CENTER2+49;
+                if( y < CENTER2-49)
+                        y=CENTER2-49;
+                map2[x+180][y]+=chg;
+                }
+        for(x=0;x<gcmaxsamples;x++)
+                {
+                y=(c40[ref-x]/c40[ref]-1.0)*mapscale[38] +CENTER2;
+                if(y > CENTER2+49)
+                        y=CENTER2+49;
+                if( y < CENTER2-49)
+                        y=CENTER2-49;
+                map2[x+200][y]+=chg;
+                }
+        for(x=0;x<gcmaxsamples;x++)
+                {
+                y=(c41[ref-x]/c41[ref]-1.0)*mapscale[39] +CENTER2;
+                if(y > CENTER2+49)
+                        y=CENTER2+49;
+                if( y < CENTER2-49)
+                        y=CENTER2-49;
+                map2[x+220][y]+=chg;
+                }
+
+        for(x=0;x<gcmaxsamples;x++)
+                {
+                y=(c42[ref-x]/c42[ref]-1.0)*mapscale[40] +CENTER3;
+                if(y > CENTER3+49)
+                        y=CENTER3+49;
+                if( y < CENTER3-49)
+                        y=CENTER3-49;
+                map2[x+160][y]+=chg;
+                }
+        for(x=0;x<gcmaxsamples;x++)
+                {
+                y=(c43[ref-x]/c43[ref]-1.0)*mapscale[41] +CENTER3;
+                if(y > CENTER3+49)
+                        y=CENTER3+49;
+                if( y < CENTER3-49)
+                        y=CENTER3-49;
+                map2[x+180][y]+=chg;
+                }
+        for(x=0;x<gcmaxsamples;x++)
+                {
+                y=(c44[ref-x]/c44[ref]-1.0)*mapscale[42] +CENTER3;
+                if(y > CENTER3+49)
+                        y=CENTER3+49;
+                if( y < CENTER3-49)
+                        y=CENTER3-49;
+                map2[x+200][y]+=chg;
+                }
+        for(x=0;x<gcmaxsamples;x++)
+                {
+                y=(c45[ref-x]/c45[ref]-1.0)*mapscale[43] +CENTER3;
+                if(y > CENTER3+49)
+                        y=CENTER3+49;
+                if( y < CENTER3-49)
+                        y=CENTER3-49;
+                map2[x+220][y]+=chg;
+                }
+        for(x=0;x<gcmaxsamples;x++)
+                {
+                y=(c46[ref-x]/c46[ref]-1.0)*mapscale[44] +CENTER4;
+                if(y > CENTER4+49)
+                        y=CENTER4+49;
+                if( y < CENTER4-49)
+                        y=CENTER4-49;
+                map2[x+160][y]+=chg;
+                }
+        for(x=0;x<gcmaxsamples;x++)
+                {
+                y=(c47[ref-x]/c47[ref]-1.0)*mapscale[45] +CENTER4;
+                if(y > CENTER4+49)
+                        y=CENTER4+49;
+                if( y < CENTER4-49)
+                        y=CENTER4-49;
+                map2[x+180][y]+=chg;
+                }
+        for(x=0;x<gcmaxsamples;x++)
+                {
+                y=(c48[ref-x]/c48[ref]-1.0)*mapscale[46] +CENTER4;
+                if(y > CENTER4+49)
+                        y=CENTER4+49;
+                if( y < CENTER4-49)
+                        y=CENTER4-49;
+                map2[x+200][y]+=chg;
+                }
+        for(x=0;x<gcmaxsamples;x++)
+                {
+                y=(c49[ref-x]/c49[ref]-1.0)*mapscale[47] +CENTER4;
+                if(y > CENTER4+49)
+                        y=CENTER4+49;
+                if( y < CENTER4-49)
+                        y=CENTER4-49;
+                map2[x+220][y]+=chg;
+                }
+
+
+
+
+        //   +++++++++++++++++++++++++
+
+        for(x=0;x<gcmaxsamples;x++)
+                {
+                y=(c50[ref-x]/c50[ref]-1.0)*mapscale[48] +CENTER5;
+                if(y > CENTER5+49)
+                        y=CENTER5+49;
+                if( y < CENTER5-49)
+                        y=CENTER5-49;
+                map2[x][y]+=chg;
+                }
+        for(x=0;x<gcmaxsamples;x++)
+                {
+                y=(c51[ref-x]/c51[ref]-1.0)*mapscale[49] +CENTER5;
+                if(y > CENTER5+49)
+                        y=CENTER5+49;
+                if( y < CENTER5-49)
+                        y=CENTER5-49;
+                map2[x+20][y]+=chg;
+                }
+        for(x=0;x<gcmaxsamples;x++)
+                {
+                y=(c52[ref-x]/c52[ref]-1.0)*mapscale[50] +CENTER5;
+                if(y > CENTER5+49)
+                        y=CENTER5+49;
+                if( y < CENTER5-49)
+                        y=CENTER5-49;
+                map2[x+40][y]+=chg;
+                }
+        for(x=0;x<gcmaxsamples;x++)
+                {
+                y=(c53[ref-x]/c53[ref]-1.0)*mapscale[51] +CENTER5;
+                if(y > CENTER5+49)
+                        y=CENTER5+49;
+                if( y < CENTER5-49)
+                        y=CENTER5-49;
+                map2[x+60][y]+=chg;
+                }
+        for(x=0;x<gcmaxsamples;x++)
+                {
+                y=(c54[ref-x]/c54[ref]-1.0)*mapscale[52] +CENTER6;
+                if(y > CENTER6+49)
+                        y=CENTER6+49;
+                if( y < CENTER6-49)
+                        y=CENTER6-49;
+                map2[x][y]+=chg;
+                }
+        for(x=0;x<gcmaxsamples;x++)
+                {
+                y=(c55[ref-x]/c55[ref]-1.0)*mapscale[53] +CENTER6;
+                if(y > CENTER6+49)
+                        y=CENTER6+49;
+                if( y < CENTER6-49)
+                        y=CENTER6-49;
+                map2[x+20][y]+=chg;
+                }
+        for(x=0;x<gcmaxsamples;x++)
+                {
+                y=(c56[ref-x]/c56[ref]-1.0)*mapscale[54] +CENTER6;
+                if(y > CENTER6+49)
+                        y=CENTER6+49;
+                if( y < CENTER6-49)
+                        y=CENTER6-49;
+                map2[x+40][y]+=chg;
+                }
+        for(x=0;x<gcmaxsamples;x++)
+                {
+                y=(c57[ref-x]/c57[ref]-1.0)*mapscale[55] +CENTER6;
+                if(y > CENTER6+49)
+                        y=CENTER6+49;
+                if( y < CENTER6-49)
+                        y=CENTER6-49;
+                map2[x+60][y]+=chg;
+                }
+
+        for(x=0;x<gcmaxsamples;x++)
+                {
+                y=(c58[ref-x]/c58[ref]-1.0)*mapscale[0] +CENTER7;
+                if(y > CENTER7+49)
+                        y=CENTER7+49;
+                if( y < CENTER7-49)
+                        y=CENTER7-49;
+                map2[x][y]+=chg;
+                }
+        for(x=0;x<gcmaxsamples;x++)
+                {
+                y=(c59[ref-x]/c59[ref]-1.0)*mapscale[0] +CENTER7;
+                if(y > CENTER7+49)
+                        y=CENTER7+49;
+                if( y < CENTER7-49)
+                        y=CENTER7-49;
+                map2[x+20][y]+=chg;
+                }
+        for(x=0;x<gcmaxsamples;x++)
+                {
+                y=(c60[ref-x]/c60[ref]-1.0)*mapscale[0] +CENTER7;
+                if(y > CENTER7+49)
+                        y=CENTER7+49;
+                if( y < CENTER7-49)
+                        y=CENTER7-49;
+                map2[x+40][y]+=chg;
+                }
+        for(x=0;x<gcmaxsamples;x++)
+                {
+                y=(c61[ref-x]/c61[ref]-1.0)*mapscale[0] +CENTER7;
+                if(y > CENTER7+49)
+                        y=CENTER7+49;
+                if( y < CENTER7-49)
+                        y=CENTER7-49;
+                map2[x+60][y]+=chg;
+                }
+        for(x=0;x<gcmaxsamples;x++)
+                {
+                y=(c62[ref-x]/c62[ref]-1.0)*mapscale[0] +CENTER8;
+                if(y > CENTER8+49)
+                        y=CENTER8+49;
+                if( y < CENTER8-49)
+                        y=CENTER8-49;
+                map2[x][y]+=chg;
+                }
+        for(x=0;x<gcmaxsamples;x++)
+                {
+                y=(c63[ref-x]/c63[ref]-1.0)*mapscale[0] +CENTER8;
+                if(y > CENTER8+49)
+                        y=CENTER8+49;
+                if( y < CENTER8-49)
+                        y=CENTER8-49;
+                map2[x+20][y]+=chg;
+                }
+        for(x=0;x<gcmaxsamples;x++)
+                {
+                y=(c64[ref-x]/c64[ref]-1.0)*mapscale[0] +CENTER8;
+                if(y > CENTER8+49)
+                        y=CENTER8+49;
+                if( y < CENTER8-49)
+                        y=CENTER8-49;
+                map2[x+40][y]+=chg;
+                }
+        for(x=0;x<gcmaxsamples;x++)
+                {
+                y=(c65[ref-x]/c65[ref]-1.0)*mapscale[0] +CENTER8;
+                if(y > CENTER8+49)
+                        y=CENTER8+49;
+                if( y < CENTER8-49)
+                        y=CENTER8-49;
+                map2[x+60][y]+=chg;
+                }
+
+        for(x=0;x<gcmaxsamples;x++)
+                {
+                y=(c66[ref-x]/c66[ref]-1.0)*mapscale[0] +CENTER5;
+                if(y > CENTER5+49)
+                        y=CENTER5+49;
+                if( y < CENTER5-49)
+                        y=CENTER5-49;
+                map2[x+80][y]+=chg;
+                }
+        for(x=0;x<gcmaxsamples;x++)
+                {
+                y=(c67[ref-x]/c67[ref]-1.0)*mapscale[0] +CENTER5;
+                if(y > CENTER5+49)
+                        y=CENTER5+49;
+                if( y < CENTER5-49)
+                        y=CENTER5-49;
+                map2[x+100][y]+=chg;
+                }
+        for(x=0;x<gcmaxsamples;x++)
+                {
+                y=(c68[ref-x]/c68[ref]-1.0)*mapscale[0] +CENTER5;
+                if(y > CENTER5+49)
+                        y=CENTER5+49;
+                if( y < CENTER5-49)
+                        y=CENTER5-49;
+                map2[x+120][y]+=chg;
+                }
+        for(x=0;x<gcmaxsamples;x++)
+                {
+                y=(c69[ref-x]/c69[ref]-1.0)*mapscale[0] +CENTER5;
+                if(y > CENTER5+49)
+                        y=CENTER5+49;
+                if( y < CENTER5-49)
+                        y=CENTER5-49;
+                map2[x+140][y]+=chg;
+                }
+        for(x=0;x<gcmaxsamples;x++)
+                {
+                y=(c70[ref-x]/c70[ref]-1.0)*mapscale[0] +CENTER6;
+                if(y > CENTER6+49)
+                        y=CENTER6+49;
+                if( y < CENTER6-49)
+                        y=CENTER6-49;
+                map2[x+80][y]+=chg;
+                }
+        for(x=0;x<gcmaxsamples;x++)
+                {
+                y=(c71[ref-x]/c71[ref]-1.0)*mapscale[0] +CENTER6;
+                if(y > CENTER6+49)
+                        y=CENTER6+49;
+                if( y < CENTER6-49)
+                        y=CENTER6-49;
+                map2[x+100][y]+=chg;
+                }
+        for(x=0;x<gcmaxsamples;x++)
+                {
+                y=(c72[ref-x]/c72[ref]-1.0)*mapscale[0] +CENTER6;
+                if(y > CENTER6+49)
+                        y=CENTER6+49;
+                if( y < CENTER6-49)
+                        y=CENTER6-49;
+                map2[x+120][y]+=chg;
+                }
+        for(x=0;x<gcmaxsamples;x++)
+                {
+                y=(c73[ref-x]/c73[ref]-1.0)*mapscale[0] +CENTER6;
+                if(y > CENTER6+49)
+                        y=CENTER6+49;
+                if( y < CENTER6-49)
+                        y=CENTER6-49;
+                map2[x+140][y]+=chg;
+                }
+
+        for(x=0;x<gcmaxsamples;x++)
+                {
+                y=(c74[ref-x]/c74[ref]-1.0)*mapscale[0] +CENTER7;
+                if(y > CENTER7+49)
+                        y=CENTER7+49;
+                if( y < CENTER7-49)
+                        y=CENTER7-49;
+                map2[x+80][y]+=chg;
+                }
+        for(x=0;x<gcmaxsamples;x++)
+                {
+                y=(c75[ref-x]/c75[ref]-1.0)*mapscale[0] +CENTER7;
+                if(y > CENTER7+49)
+                        y=CENTER7+49;
+                if( y < CENTER7-49)
+                        y=CENTER7-49;
+                map2[x+100][y]+=chg;
+                }
+        for(x=0;x<gcmaxsamples;x++)
+                {
+                y=(c76[ref-x]/c76[ref]-1.0)*mapscale[0] +CENTER7;
+                if(y > CENTER7+49)
+                        y=CENTER7+49;
+                if( y < CENTER7-49)
+                        y=CENTER7-49;
+                map2[x+120][y]+=chg;
+                }
+        for(x=0;x<gcmaxsamples;x++)
+                {
+                y=(c77[ref-x]/c77[ref]-1.0)*mapscale[0] +CENTER7;
+                if(y > CENTER7+49)
+                        y=CENTER7+49;
+                if( y < CENTER7-49)
+                        y=CENTER7-49;
+                map2[x+140][y]+=chg;
+                }
+        for(x=0;x<gcmaxsamples;x++)
+                {
+                y=(c78[ref-x]/c78[ref]-1.0)*mapscale[0] +CENTER8;
+                if(y > CENTER8+49)
+                        y=CENTER8+49;
+                if( y < CENTER8-49)
+                        y=CENTER8-49;
+                map2[x+80][y]+=chg;
+                }
+        for(x=0;x<gcmaxsamples;x++)
+                {
+                y=(c79[ref-x]/c79[ref]-1.0)*mapscale[0] +CENTER8;
+                if(y > CENTER8+49)
+                        y=CENTER8+49;
+                if( y < CENTER8-49)
+                        y=CENTER8-49;
+                map2[x+100][y]+=chg;
+                }
+        for(x=0;x<gcmaxsamples;x++)
+                {
+                y=(c80[ref-x]/c80[ref]-1.0)*mapscale[0] +CENTER8;
+                if(y > CENTER8+49)
+                        y=CENTER8+49;
+                if( y < CENTER8-49)
+                        y=CENTER8-49;
+                map2[x+120][y]+=chg;
+                }
+        for(x=0;x<gcmaxsamples;x++)
+                {
+                y=(c81[ref-x]/c81[ref]-1.0)*mapscale[0] +CENTER8;
+                if(y > CENTER8+49)
+                        y=CENTER8+49;
+                if( y < CENTER8-49)
+                        y=CENTER8-49;
+                map2[x+140][y]+=chg;
+                }
+
+
+        for(x=0;x<gcmaxsamples;x++)
+                {
+                y=(c82[ref-x]/c82[ref]-1.0)*mapscale[0] +CENTER5;
+                if(y > CENTER5+49)
+                        y=CENTER5+49;
+                if( y < CENTER5-49)
+                        y=CENTER5-49;
+                map2[x+160][y]+=chg;
+                }
+        for(x=0;x<gcmaxsamples;x++)
+                {
+                y=(c83[ref-x]/c83[ref]-1.0)*mapscale[0] +CENTER5;
+                if(y > CENTER5+49)
+                        y=CENTER5+49;
+                if( y < CENTER5-49)
+                        y=CENTER5-49;
+                map2[x+180][y]+=chg;
+                }
+        for(x=0;x<gcmaxsamples;x++)
+                {
+                y=(c84[ref-x]/c84[ref]-1.0)*mapscale[0] +CENTER5;
+                if(y > CENTER5+49)
+                        y=CENTER5+49;
+                if( y < CENTER5-49)
+                        y=CENTER5-49;
+                map2[x+200][y]+=chg;
+                }
+        for(x=0;x<gcmaxsamples;x++)
+                {
+                y=(c85[ref-x]/c85[ref]-1.0)*mapscale[0] +CENTER5;
+                if(y > CENTER5+49)
+                        y=CENTER5+49;
+                if( y < CENTER5-49)
+                        y=CENTER5-49;
+                map2[x+220][y]+=chg;
+                }
+        for(x=0;x<gcmaxsamples;x++)
+                {
+                y=(c86[ref-x]/c86[ref]-1.0)*mapscale[0] +CENTER6;
+                if(y > CENTER6+49)
+                        y=CENTER6+49;
+                if( y < CENTER6-49)
+                        y=CENTER6-49;
+                map2[x+160][y]+=chg;
+                }
+        for(x=0;x<gcmaxsamples;x++)
+                {
+                y=(c87[ref-x]/c87[ref]-1.0)*mapscale[0] +CENTER6;
+                if(y > CENTER6+49)
+                        y=CENTER6+49;
+                if( y < CENTER6-49)
+                        y=CENTER6-49;
+                map2[x+180][y]+=chg;
+                }
+        for(x=0;x<gcmaxsamples;x++)
+                {
+                y=(c88[ref-x]/c88[ref]-1.0)*mapscale[0] +CENTER6;
+                if(y > CENTER6+49)
+                        y=CENTER6+49;
+                if( y < CENTER6-49)
+                        y=CENTER6-49;
+                map2[x+200][y]+=chg;
+                }
+        for(x=0;x<gcmaxsamples;x++)
+                {
+                y=(c89[ref-x]/c89[ref]-1.0)*mapscale[0] +CENTER6;
+                if(y > CENTER6+49)
+                        y=CENTER6+49;
+                if( y < CENTER6-49)
+                        y=CENTER6-49;
+                map2[x+220][y]+=chg;
+                }
+
+        for(x=0;x<gcmaxsamples;x++)
+                {
+                y=(c90[ref-x]/c90[ref]-1.0)*mapscale[0] +CENTER7;
+                if(y > CENTER7+49)
+                        y=CENTER7+49;
+                if( y < CENTER7-49)
+                        y=CENTER7-49;
+                map2[x+160][y]+=chg;
+                }
+        for(x=0;x<gcmaxsamples;x++)
+                {
+                y=(c91[ref-x]/c91[ref]-1.0)*mapscale[0] +CENTER7;
+                if(y > CENTER7+49)
+                        y=CENTER7+49;
+                if( y < CENTER7-49)
+                        y=CENTER7-49;
+                map2[x+180][y]+=chg;
+                }
+        for(x=0;x<gcmaxsamples;x++)
+                {
+                y=(c92[ref-x]/c92[ref]-1.0)*mapscale[0] +CENTER7;
+                if(y > CENTER7+49)
+                        y=CENTER7+49;
+                if( y < CENTER7-49)
+                        y=CENTER7-49;
+                map2[x+200][y]+=chg;
+                }
+        for(x=0;x<gcmaxsamples;x++)
+                {
+                y=(c93[ref-x]/c93[ref]-1.0)*mapscale[0] +CENTER7;
+                if(y > CENTER7+49)
+                        y=CENTER7+49;
+                if( y < CENTER7-49)
+                        y=CENTER7-49;
+                map2[x+220][y]+=chg;
+                }
+        for(x=0;x<gcmaxsamples;x++)
+                {
+                y=(c94[ref-x]/c94[ref]-1.0)*mapscale[0] +CENTER8;
+                if(y > CENTER8+49)
+                        y=CENTER8+49;
+                if( y < CENTER8-49)
+                        y=CENTER8-49;
+                map2[x+160][y]+=chg;
+                }
+        for(x=0;x<gcmaxsamples;x++)
+                {
+                y=(c95[ref-x]/c95[ref]-1.0)*mapscale[0] +CENTER8;
+                if(y > CENTER8+49)
+                        y=CENTER8+49;
+                if( y < CENTER8-49)
+                        y=CENTER8-49;
+                map2[x+180][y]+=chg;
+                }
+        for(x=0;x<gcmaxsamples;x++)
+                {
+                y=(c96[ref-x]/c96[ref]-1.0)*mapscale[0] +CENTER8;
+                if(y > CENTER8+49)
+                        y=CENTER8+49;
+                if( y < CENTER8-49)
+                        y=CENTER8-49;
+                map2[x+200][y]+=chg;
+                }
+        for(x=0;x<gcmaxsamples;x++)
+                {
+                y=(c97[ref-x]/c97[ref]-1.0)*mapscale[0] +CENTER8;
+                if(y > CENTER8+49)
+                        y=CENTER8+49;
+                if( y < CENTER8-49)
+                        y=CENTER8-49;
+                map2[x+220][y]+=chg;
+                }
+
+
+        return(1);
+        }
+
+ //+++++++++++++++++++++++++++++++
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+c_perfn(ref)
+	int ref;
+	{
+	int x,y;
+        float p,n,factor,val;
+        float win,loss,pofa,pofb,pofbga;
+        globalsum=0.0;
+        globalcount=0.0;
+        sumnew=0.0;   //global
+      //  c_trailstdev(ref);
+        for(x=0;x<=gcmaxsamples;x++)
+                {
+                y=(c2[ref-x]/c2[ref]-1.0)*mapscale[0]+CENTER1;
+                if(y > CENTER1+49)
+                        y=CENTER1+49;
+                if( y < CENTER1-49)
+                        y=CENTER1-49;
+                win=map[x][y];
+                loss=map2[x][y];
+                if((win+loss) >= 1.0 )
+                        {
+                        pofa=.54; // raw P(A)
+                        pofb=(win+loss)/ttp; // P(B)
+                        pofbga=win/twtp;     // P(B|A)
+                        val=(pofa*pofbga/pofb); // Bayes applied
+                        globalsum+=val;
+                        globalcount+=1.0;
+                        }
+                else
+                        sumnew+=1.0;
+                }
+        for(x=0;x<=gcmaxsamples;x++)
+                {
+                y=(c3[ref-x]/c3[ref]-1.0)*mapscale[1]+CENTER1;
+                if(y > CENTER1+49)
+                        y=CENTER1+49;
+                if( y < CENTER1-49)
+                        y=CENTER1-49;
+                win=map[x+20][y];
+                loss=map2[x+20][y];
+                if((win+loss) >= 1.0 )
+                        {
+                        
+                        pofb=(win+loss)/ttp; // P(B)
+                        pofbga=win/twtp;     // P(B|A)
+                        val=(pofa*pofbga/pofb); // Bayes applied
+                        globalsum+=val;
+                        globalcount+=1.0;
+
+                        }
+                else
+                        sumnew+=1.0;
+                }
+        for(x=0;x<=gcmaxsamples;x++)
+                {
+                y=(c4[ref-x]/c4[ref]-1.0)*mapscale[2]+CENTER1;
+                if(y > CENTER1+49)
+                        y=CENTER1+49;
+                if( y < CENTER1-49)
+                        y=CENTER1-49;
+                win=map[x+40][y];
+                loss=map2[x+40][y];
+                if((win+loss) >= 1.0 )
+                        {
+                        
+                        pofb=(win+loss)/ttp; // P(B)
+                        pofbga=win/twtp;     // P(B|A)
+                        val=(pofa*pofbga/pofb); // Bayes applied
+                        globalsum+=val;
+                        globalcount+=1.0;
+
+                        }
+                else
+                        sumnew+=1.0;
+                }
+        for(x=0;x<=gcmaxsamples;x++)
+                {
+                y=(c5[ref-x]/c5[ref]-1.0)*mapscale[3]+CENTER1;
+                if(y > CENTER1+49)
+                        y=CENTER1+49;
+                if( y < CENTER1-49)
+                        y=CENTER1-49;
+                win=map[x+60][y];
+                loss=map2[x+60][y];
+                if((win+loss) >= 1.0 )
+                        {
+                        
+                        pofb=(win+loss)/ttp; // P(B)
+                        pofbga=win/twtp;     // P(B|A)
+                        val=(pofa*pofbga/pofb); // Bayes applied
+                        globalsum+=val;
+                        globalcount+=1.0;
+
+                        }
+                else
+                        sumnew+=1.0;
+                }
+
+        for(x=0;x<=gcmaxsamples;x++)
+                {
+                y=(c6[ref-x]/c6[ref]-1.0)*mapscale[4]+CENTER2;
+                if(y > CENTER2+49)
+                        y=CENTER2+49;
+                if( y < CENTER2-49)
+                        y=CENTER2-49;
+                win=map[x][y];
+                loss=map2[x][y];
+                if((win+loss) >= 1.0 )
+                        {
+                        
+                        pofb=(win+loss)/ttp; // P(B)
+                        pofbga=win/twtp;     // P(B|A)
+                        val=(pofa*pofbga/pofb); // Bayes applied
+                        globalsum+=val;
+                        globalcount+=1.0;
+
+                        }
+                else
+                        sumnew+=1.0;
+                }
+        for(x=0;x<=gcmaxsamples;x++)
+                {
+                y=(c7[ref-x]/c7[ref]-1.0)*mapscale[5]+CENTER2;
+                if(y > CENTER2+49)
+                        y=CENTER2+49;
+                if( y < CENTER2-49)
+                        y=CENTER2-49;
+                win=map[x+20][y];
+                loss=map2[x+20][y];
+                if((win+loss) >= 1.0 )
+                        {
+                        
+                        pofb=(win+loss)/ttp; // P(B)
+                        pofbga=win/twtp;     // P(B|A)
+                        val=(pofa*pofbga/pofb); // Bayes applied
+                        globalsum+=val;
+                        globalcount+=1.0;
+
+                        }
+                else
+                        sumnew+=1.0;
+                }
+        for(x=0;x<=gcmaxsamples;x++)
+                {
+                y=(c8[ref-x]/c8[ref]-1.0)*mapscale[6]+CENTER2;
+                if(y > CENTER2+49)
+                        y=CENTER2+49;
+                if( y < CENTER2-49)
+                        y=CENTER2-49;
+                win=map[x+40][y];
+                loss=map2[x+40][y];
+                if((win+loss) >= 1.0 )
+                        {
+                        
+                        pofb=(win+loss)/ttp; // P(B)
+                        pofbga=win/twtp;     // P(B|A)
+                        val=(pofa*pofbga/pofb); // Bayes applied
+                        globalsum+=val;
+                        globalcount+=1.0;
+
+                        }
+                else
+                        sumnew+=1.0;
+                }
+        for(x=0;x<=gcmaxsamples;x++)
+                {
+                y=(c9[ref-x]/c9[ref]-1.0)*mapscale[7]+CENTER2;
+                if(y > CENTER2+49)
+                        y=CENTER2+49;
+                if( y < CENTER2-49)
+                        y=CENTER2-49;
+                win=map[x+60][y];
+                loss=map2[x+60][y];
+                if((win+loss) >= 1.0 )
+                        {
+                        
+                        pofb=(win+loss)/ttp; // P(B)
+                        pofbga=win/twtp;     // P(B|A)
+                        val=(pofa*pofbga/pofb); // Bayes applied
+                        globalsum+=val;
+                        globalcount+=1.0;
+
+                        }
+                else
+                        sumnew+=1.0;
+                }
+
+
+        for(x=0;x<=gcmaxsamples;x++)
+                {
+                y=(c10[ref-x]/c10[ref]-1.0)*mapscale[8]+CENTER3;
+                if(y > CENTER3+49)
+                        y=CENTER3+49;
+                if( y < CENTER3-49)
+                        y=CENTER3-49;
+                win=map[x][y];
+                loss=map2[x][y];
+                if((win+loss) >= 1.0 )
+                        {
+                        
+                        pofb=(win+loss)/ttp; // P(B)
+                        pofbga=win/twtp;     // P(B|A)
+                        val=(pofa*pofbga/pofb); // Bayes applied
+                        globalsum+=val;
+                        globalcount+=1.0;
+
+                        }
+                else
+                        sumnew+=1.0;
+                }
+        for(x=0;x<=gcmaxsamples;x++)
+                {
+                y=(c11[ref-x]/c11[ref]-1.0)*mapscale[9]+CENTER3;
+                if(y > CENTER3+49)
+                        y=CENTER3+49;
+                if( y < CENTER3-49)
+                        y=CENTER3-49;
+                win=map[x+20][y];
+                loss=map2[x+20][y];
+                if((win+loss) >= 1.0 )
+                        {
+                        
+                        pofb=(win+loss)/ttp; // P(B)
+                        pofbga=win/twtp;     // P(B|A)
+                        val=(pofa*pofbga/pofb); // Bayes applied
+                        globalsum+=val;
+                        globalcount+=1.0;
+
+                        }
+                else
+                        sumnew+=1.0;
+                }
+        for(x=0;x<=gcmaxsamples;x++)
+                {
+                y=(c12[ref-x]/c12[ref]-1.0)*mapscale[10]+CENTER3;
+                if(y > CENTER3+49)
+                        y=CENTER3+49;
+                if( y < CENTER3-49)
+                        y=CENTER3-49;
+                win=map[x+40][y];
+                loss=map2[x+40][y];
+                if((win+loss) >= 1.0 )
+                        {
+                        
+                        pofb=(win+loss)/ttp; // P(B)
+                        pofbga=win/twtp;     // P(B|A)
+                        val=(pofa*pofbga/pofb); // Bayes applied
+                        globalsum+=val;
+                        globalcount+=1.0;
+
+                        }
+                else
+                        sumnew+=1.0;
+                }
+        for(x=0;x<=gcmaxsamples;x++)
+                {
+                y=(c13[ref-x]/c13[ref]-1.0)*mapscale[11]+CENTER3;
+                if(y > CENTER3+49)
+                        y=CENTER3+49;
+                if( y < CENTER3-49)
+                        y=CENTER3-49;
+                win=map[x+60][y];
+                loss=map2[x+60][y];
+                if((win+loss) >= 1.0 )
+                        {
+                        
+                        pofb=(win+loss)/ttp; // P(B)
+                        pofbga=win/twtp;     // P(B|A)
+                        val=(pofa*pofbga/pofb); // Bayes applied
+                        globalsum+=val;
+                        globalcount+=1.0;
+
+                        }
+                else
+                        sumnew+=1.0;
+                }
+
+        for(x=0;x<=gcmaxsamples;x++)
+                {
+                y=(c14[ref-x]/c14[ref]-1.0)*mapscale[12]+CENTER4;
+                if(y > CENTER4+49)
+                        y=CENTER4+49;
+                if( y < CENTER4-49)
+                        y=CENTER4-49;
+                win=map[x][y];
+                loss=map2[x][y];
+                if((win+loss) >= 1.0 )
+                        {
+                        
+                        pofb=(win+loss)/ttp; // P(B)
+                        pofbga=win/twtp;     // P(B|A)
+                        val=(pofa*pofbga/pofb); // Bayes applied
+                        globalsum+=val;
+                        globalcount+=1.0;
+
+                        }
+                else
+                        sumnew+=1.0;
+                }
+        for(x=0;x<=gcmaxsamples;x++)
+                {
+                y=(c15[ref-x]/c15[ref]-1.0)*mapscale[13]+CENTER4;
+                if(y > CENTER4+49)
+                        y=CENTER4+49;
+                if( y < CENTER4-49)
+                        y=CENTER4-49;
+                win=map[x+20][y];
+                loss=map2[x+20][y];
+                if((win+loss) >= 1.0 )
+                        {
+                        
+                        pofb=(win+loss)/ttp; // P(B)
+                        pofbga=win/twtp;     // P(B|A)
+                        val=(pofa*pofbga/pofb); // Bayes applied
+                        globalsum+=val;
+                        globalcount+=1.0;
+
+                        }
+                else
+                        sumnew+=1.0;
+                }
+        for(x=0;x<=gcmaxsamples;x++)
+                {
+                y=(c16[ref-x]/c16[ref]-1.0)*mapscale[14]+CENTER4;
+                if(y > CENTER4+49)
+                        y=CENTER4+49;
+                if( y < CENTER4-49)
+                        y=CENTER4-49;
+                win=map[x+40][y];
+                loss=map2[x+40][y];
+                if((win+loss) >= 1.0 )
+                        {
+                        
+                        pofb=(win+loss)/ttp; // P(B)
+                        pofbga=win/twtp;     // P(B|A)
+                        val=(pofa*pofbga/pofb); // Bayes applied
+                        globalsum+=val;
+                        globalcount+=1.0;
+
+                        }
+                else
+                        sumnew+=1.0;
+                }
+        for(x=0;x<=gcmaxsamples;x++)
+                {
+                y=(c17[ref-x]/c17[ref]-1.0)*mapscale[15]+CENTER4;
+                if(y > CENTER4+49)
+                        y=CENTER4+49;
+                if( y < CENTER4-49)
+                        y=CENTER4-49;
+                win=map[x+60][y];
+                loss=map2[x+60][y];
+                if((win+loss) >= 1.0 )
+                        {
+                        
+                        pofb=(win+loss)/ttp; // P(B)
+                        pofbga=win/twtp;     // P(B|A)
+                        val=(pofa*pofbga/pofb); // Bayes applied
+                        globalsum+=val;
+                        globalcount+=1.0;
+
+                        }
+                else
+                        sumnew+=1.0;
+                }
+
+
+        for(x=0;x<=gcmaxsamples;x++)
+                {
+                y=(c18[ref-x]/c18[ref]-1.0)*mapscale[16]+CENTER1;
+                if(y > CENTER1+49)
+                        y=CENTER1+49;
+                if( y < CENTER1-49)
+                        y=CENTER1-49;
+                win=map[x+80][y];
+                loss=map2[x+80][y];
+                if((win+loss) >= 1.0 )
+                        {
+                        
+                        pofb=(win+loss)/ttp; // P(B)
+                        pofbga=win/twtp;     // P(B|A)
+                        val=(pofa*pofbga/pofb); // Bayes applied
+                        globalsum+=val;
+                        globalcount+=1.0;
+
+                        }
+                else
+                        sumnew+=1.0;
+                }
+        for(x=0;x<=gcmaxsamples;x++)
+                {
+                y=(c19[ref-x]/c19[ref]-1.0)*mapscale[17]+CENTER1;
+                if(y > CENTER1+49)
+                        y=CENTER1+49;
+                if( y < CENTER1-49)
+                        y=CENTER1-49;
+                win=map[x+100][y];
+                loss=map2[x+100][y];
+                if((win+loss) >= 1.0 )
+                        {
+                        
+                        pofb=(win+loss)/ttp; // P(B)
+                        pofbga=win/twtp;     // P(B|A)
+                        val=(pofa*pofbga/pofb); // Bayes applied
+                        globalsum+=val;
+                        globalcount+=1.0;
+
+                        }
+                else
+                        sumnew+=1.0;
+                }
+        for(x=0;x<=gcmaxsamples;x++)
+                {
+                y=(c20[ref-x]/c20[ref]-1.0)*mapscale[18]+CENTER1;
+                if(y > CENTER1+49)
+                        y=CENTER1+49;
+                if( y < CENTER1-49)
+                        y=CENTER1-49;
+                win=map[x+120][y];
+                loss=map2[x+120][y];
+                if((win+loss) >= 1.0 )
+                        {
+                        
+                        pofb=(win+loss)/ttp; // P(B)
+                        pofbga=win/twtp;     // P(B|A)
+                        val=(pofa*pofbga/pofb); // Bayes applied
+                        globalsum+=val;
+                        globalcount+=1.0;
+
+                        }
+                else
+                        sumnew+=1.0;
+                }
+        for(x=0;x<=gcmaxsamples;x++)
+                {
+                y=(c21[ref-x]/c21[ref]-1.0)*mapscale[19]+CENTER1;
+                if(y > CENTER1+49)
+                        y=CENTER1+49;
+                if( y < CENTER1-49)
+                        y=CENTER1-49;
+                win=map[x+140][y];
+                loss=map2[x+140][y];
+                if((win+loss) >= 1.0 )
+                        {
+                        
+                        pofb=(win+loss)/ttp; // P(B)
+                        pofbga=win/twtp;     // P(B|A)
+                        val=(pofa*pofbga/pofb); // Bayes applied
+                        globalsum+=val;
+                        globalcount+=1.0;
+
+                        }
+                else
+                        sumnew+=1.0;
+                }
+
+        for(x=0;x<=gcmaxsamples;x++)
+                {
+                y=(c22[ref-x]/c22[ref]-1.0)*mapscale[20]+CENTER2;
+                if(y > CENTER2+49)
+                        y=CENTER2+49;
+                if( y < CENTER2-49)
+                        y=CENTER2-49;
+                win=map[x+80][y];
+                loss=map2[x+80][y];
+                if((win+loss) >= 1.0 )
+                        {
+                        
+                        pofb=(win+loss)/ttp; // P(B)
+                        pofbga=win/twtp;     // P(B|A)
+                        val=(pofa*pofbga/pofb); // Bayes applied
+                        globalsum+=val;
+                        globalcount+=1.0;
+
+                        }
+                else
+                        sumnew+=1.0;
+                }
+        for(x=0;x<=gcmaxsamples;x++)
+                {
+                y=(c23[ref-x]/c23[ref]-1.0)*mapscale[21]+CENTER2;
+                if(y > CENTER2+49)
+                        y=CENTER2+49;
+                if( y < CENTER2-49)
+                        y=CENTER2-49;
+                win=map[x+100][y];
+                loss=map2[x+100][y];
+                if((win+loss) >= 1.0 )
+                        {
+                        
+                        pofb=(win+loss)/ttp; // P(B)
+                        pofbga=win/twtp;     // P(B|A)
+                        val=(pofa*pofbga/pofb); // Bayes applied
+                        globalsum+=val;
+                        globalcount+=1.0;
+
+                        }
+                else
+                        sumnew+=1.0;
+                }
+        for(x=0;x<=gcmaxsamples;x++)
+                {
+                y=(c24[ref-x]/c24[ref]-1.0)*mapscale[22]+CENTER2;
+                if(y > CENTER2+49)
+                        y=CENTER2+49;
+                if( y < CENTER2-49)
+                        y=CENTER2-49;
+                win=map[x+120][y];
+                loss=map2[x+120][y];
+                if((win+loss) >= 1.0 )
+                        {
+                        
+                        pofb=(win+loss)/ttp; // P(B)
+                        pofbga=win/twtp;     // P(B|A)
+                        val=(pofa*pofbga/pofb); // Bayes applied
+                        globalsum+=val;
+                        globalcount+=1.0;
+
+                        }
+                else
+                        sumnew+=1.0;
+                }
+        for(x=0;x<=gcmaxsamples;x++)
+                {
+                y=(c25[ref-x]/c25[ref]-1.0)*mapscale[23]+CENTER2;
+                if(y > CENTER2+49)
+                        y=CENTER2+49;
+                if( y < CENTER2-49)
+                        y=CENTER2-49;
+                win=map[x+140][y];
+                loss=map2[x+140][y];
+                if((win+loss) >= 1.0 )
+                        {
+                        
+                        pofb=(win+loss)/ttp; // P(B)
+                        pofbga=win/twtp;     // P(B|A)
+                        val=(pofa*pofbga/pofb); // Bayes applied
+                        globalsum+=val;
+                        globalcount+=1.0;
+
+                        }
+                else
+                        sumnew+=1.0;
+                }
+        for(x=0;x<=gcmaxsamples;x++)
+                {
+                y=(c26[ref-x]/c26[ref]-1.0)*mapscale[24]+CENTER3;
+                if(y > CENTER3+49)
+                        y=CENTER3+49;
+                if( y < CENTER3-49)
+                        y=CENTER3-49;
+                win=map[x+80][y];
+                loss=map2[x+80][y];
+                if((win+loss) >= 1.0 )
+                        {
+                        
+                        pofb=(win+loss)/ttp; // P(B)
+                        pofbga=win/twtp;     // P(B|A)
+                        val=(pofa*pofbga/pofb); // Bayes applied
+                        globalsum+=val;
+                        globalcount+=1.0;
+
+                        }
+                else
+                        sumnew+=1.0;
+                }
+        for(x=0;x<=gcmaxsamples;x++)
+                {
+                y=(c27[ref-x]/c27[ref]-1.0)*mapscale[25]+CENTER3;
+                if(y > CENTER3+49)
+                        y=CENTER3+49;
+                if( y < CENTER3-49)
+                        y=CENTER3-49;
+                win=map[x+100][y];
+                loss=map2[x+100][y];
+                if((win+loss) >= 1.0 )
+                        {
+                        
+                        pofb=(win+loss)/ttp; // P(B)
+                        pofbga=win/twtp;     // P(B|A)
+                        val=(pofa*pofbga/pofb); // Bayes applied
+                        globalsum+=val;
+                        globalcount+=1.0;
+
+                        }
+                else
+                        sumnew+=1.0;
+                }
+        for(x=0;x<=gcmaxsamples;x++)
+                {
+                y=(c28[ref-x]/c28[ref]-1.0)*mapscale[26]+CENTER3;
+                if(y > CENTER3+49)
+                        y=CENTER3+49;
+                if( y < CENTER3-49)
+                        y=CENTER3-49;
+                win=map[x+120][y];
+                loss=map2[x+120][y];
+                if((win+loss) >= 1.0 )
+                        {
+                        
+                        pofb=(win+loss)/ttp; // P(B)
+                        pofbga=win/twtp;     // P(B|A)
+                        val=(pofa*pofbga/pofb); // Bayes applied
+                        globalsum+=val;
+                        globalcount+=1.0;
+
+                        }
+                else
+                        sumnew+=1.0;
+                }
+        for(x=0;x<=gcmaxsamples;x++)
+                {
+                y=(c29[ref-x]/c29[ref]-1.0)*mapscale[27]+CENTER3;
+                if(y > CENTER3+49)
+                        y=CENTER3+49;
+                if( y < CENTER3-49)
+                        y=CENTER3-49;
+                win=map[x+140][y];
+                loss=map2[x+140][y];
+                if((win+loss) >= 1.0 )
+                        {
+                        
+                        pofb=(win+loss)/ttp; // P(B)
+                        pofbga=win/twtp;     // P(B|A)
+                        val=(pofa*pofbga/pofb); // Bayes applied
+                        globalsum+=val;
+                        globalcount+=1.0;
+
+                        }
+                else
+                        sumnew+=1.0;
+                }
+
+        for(x=0;x<=gcmaxsamples;x++)
+                {
+                y=(c30[ref-x]/c30[ref]-1.0)*mapscale[28]+CENTER4;
+                if(y > CENTER4+49)
+                        y=CENTER4+49;
+                if( y < CENTER4-49)
+                        y=CENTER4-49;
+                win=map[x+80][y];
+                loss=map2[x+80][y];
+                if((win+loss) >= 1.0 )
+                        {
+                        
+                        pofb=(win+loss)/ttp; // P(B)
+                        pofbga=win/twtp;     // P(B|A)
+                        val=(pofa*pofbga/pofb); // Bayes applied
+                        globalsum+=val;
+                        globalcount+=1.0;
+
+                        }
+                else
+                        sumnew+=1.0;
+                }
+        for(x=0;x<=gcmaxsamples;x++)
+                {
+                y=(c31[ref-x]/c31[ref]-1.0)*mapscale[29]+CENTER4;
+                if(y > CENTER4+49)
+                        y=CENTER4+49;
+                if( y < CENTER4-49)
+                        y=CENTER4-49;
+                win=map[x+100][y];
+                loss=map2[x+100][y];
+                if((win+loss) >= 1.0 )
+                        {
+                        
+                        pofb=(win+loss)/ttp; // P(B)
+                        pofbga=win/twtp;     // P(B|A)
+                        val=(pofa*pofbga/pofb); // Bayes applied
+                        globalsum+=val;
+                        globalcount+=1.0;
+
+                        }
+                else
+                        sumnew+=1.0;
+                }
+        for(x=0;x<=gcmaxsamples;x++)
+                {
+                y=(c32[ref-x]/c32[ref]-1.0)*mapscale[30]+CENTER4;
+                if(y > CENTER4+49)
+                        y=CENTER4+49;
+                if( y < CENTER4-49)
+                        y=CENTER4-49;
+                win=map[x+120][y];
+                loss=map2[x+120][y];
+                if((win+loss) >= 1.0 )
+                        {
+                        
+                        pofb=(win+loss)/ttp; // P(B)
+                        pofbga=win/twtp;     // P(B|A)
+                        val=(pofa*pofbga/pofb); // Bayes applied
+                        globalsum+=val;
+                        globalcount+=1.0;
+
+                        }
+                else
+                        sumnew+=1.0;
+                }
+        for(x=0;x<=gcmaxsamples;x++)
+                {
+                y=(c33[ref-x]/c33[ref]-1.0)*mapscale[31]+CENTER4;
+                if(y > CENTER4+49)
+                        y=CENTER4+49;
+                if( y < CENTER4-49)
+                        y=CENTER4-49;
+                win=map[x+140][y];
+                loss=map2[x+140][y];
+                if((win+loss) >= 1.0 )
+                        {
+                        
+                        pofb=(win+loss)/ttp; // P(B)
+                        pofbga=win/twtp;     // P(B|A)
+                        val=(pofa*pofbga/pofb); // Bayes applied
+                        globalsum+=val;
+                        globalcount+=1.0;
+
+                        }
+                else
+                        sumnew+=1.0;
+                }
+        for(x=0;x<=gcmaxsamples;x++)
+                {
+                y=(c34[ref-x]/c34[ref]-1.0)*mapscale[32]+CENTER1;
+                if(y > CENTER1+49)
+                        y=CENTER1+49;
+                if( y < CENTER1-49)
+                        y=CENTER1-49;
+                win=map[x+160][y];
+                loss=map2[x+160][y];
+                if((win+loss) >= 1.0 )
+                        {
+                        
+                        pofb=(win+loss)/ttp; // P(B)
+                        pofbga=win/twtp;     // P(B|A)
+                        val=(pofa*pofbga/pofb); // Bayes applied
+                        globalsum+=val;
+                        globalcount+=1.0;
+
+                        }
+                else
+                        sumnew+=1.0;
+                }
+        for(x=0;x<=gcmaxsamples;x++)
+                {
+                y=(c35[ref-x]/c35[ref]-1.0)*mapscale[33]+CENTER1;
+                if(y > CENTER1+49)
+                        y=CENTER1+49;
+                if( y < CENTER1-49)
+                        y=CENTER1-49;
+                win=map[x+180][y];
+                loss=map2[x+180][y];
+                if((win+loss) >= 1.0 )
+                        {
+                        
+                        pofb=(win+loss)/ttp; // P(B)
+                        pofbga=win/twtp;     // P(B|A)
+                        val=(pofa*pofbga/pofb); // Bayes applied
+                        globalsum+=val;
+                        globalcount+=1.0;
+
+                        }
+                else
+                        sumnew+=1.0;
+                }
+        for(x=0;x<=gcmaxsamples;x++)
+                {
+                y=(c36[ref-x]/c36[ref]-1.0)*mapscale[34]+CENTER1;
+                if(y > CENTER1+49)
+                        y=CENTER1+49;
+                if( y < CENTER1-49)
+                        y=CENTER1-49;
+                win=map[x+200][y];
+                loss=map2[x+200][y];
+                if((win+loss) >= 1.0 )
+                        {
+                        
+                        pofb=(win+loss)/ttp; // P(B)
+                        pofbga=win/twtp;     // P(B|A)
+                        val=(pofa*pofbga/pofb); // Bayes applied
+                        globalsum+=val;
+                        globalcount+=1.0;
+
+                        }
+                else
+                        sumnew+=1.0;
+                }
+        for(x=0;x<=gcmaxsamples;x++)
+                {
+                y=(c37[ref-x]/c37[ref]-1.0)*mapscale[35]+CENTER1;
+                if(y > CENTER1+49)
+                        y=CENTER1+49;
+                if( y < CENTER1-49)
+                        y=CENTER1-49;
+                win=map[x+220][y];
+                loss=map2[x+220][y];
+                if((win+loss) >= 1.0 )
+                        {
+                        
+                        pofb=(win+loss)/ttp; // P(B)
+                        pofbga=win/twtp;     // P(B|A)
+                        val=(pofa*pofbga/pofb); // Bayes applied
+                        globalsum+=val;
+                        globalcount+=1.0;
+
+                        }
+                else
+                        sumnew+=1.0;
+                }
+
+        for(x=0;x<=gcmaxsamples;x++)
+                {
+                y=(c38[ref-x]/c38[ref]-1.0)*mapscale[36]+CENTER2;
+                if(y > CENTER2+49)
+                        y=CENTER2+49;
+                if( y < CENTER2-49)
+                        y=CENTER2-49;
+                win=map[x+160][y];
+                loss=map2[x+160][y];
+                if((win+loss) >= 1.0 )
+                        {
+                        
+                        pofb=(win+loss)/ttp; // P(B)
+                        pofbga=win/twtp;     // P(B|A)
+                        val=(pofa*pofbga/pofb); // Bayes applied
+                        globalsum+=val;
+                        globalcount+=1.0;
+
+                        }
+                else
+                        sumnew+=1.0;
+                }
+        for(x=0;x<=gcmaxsamples;x++)
+                {
+                y=(c39[ref-x]/c39[ref]-1.0)*mapscale[37]+CENTER2;
+                if(y > CENTER2+49)
+                        y=CENTER2+49;
+                if( y < CENTER2-49)
+                        y=CENTER2-49;
+                win=map[x+180][y];
+                loss=map2[x+180][y];
+                if((win+loss) >= 1.0 )
+                        {
+                        
+                        pofb=(win+loss)/ttp; // P(B)
+                        pofbga=win/twtp;     // P(B|A)
+                        val=(pofa*pofbga/pofb); // Bayes applied
+                        globalsum+=val;
+                        globalcount+=1.0;
+
+                        }
+                else
+                        sumnew+=1.0;
+                }
+        for(x=0;x<=gcmaxsamples;x++)
+                {
+                y=(c40[ref-x]/c40[ref]-1.0)*mapscale[38]+CENTER2;
+                if(y > CENTER2+49)
+                        y=CENTER2+49;
+                if( y < CENTER2-49)
+                        y=CENTER2-49;
+                win=map[x+200][y];
+                loss=map2[x+200][y];
+                if((win+loss) >= 1.0 )
+                        {
+                        
+                        pofb=(win+loss)/ttp; // P(B)
+                        pofbga=win/twtp;     // P(B|A)
+                        val=(pofa*pofbga/pofb); // Bayes applied
+                        globalsum+=val;
+                        globalcount+=1.0;
+
+                        }
+                else
+                        sumnew+=1.0;
+                }
+        for(x=0;x<=gcmaxsamples;x++)
+                {
+                y=(c41[ref-x]/c41[ref]-1.0)*mapscale[39]+CENTER2;
+                if(y > CENTER2+49)
+                        y=CENTER2+49;
+                if( y < CENTER2-49)
+                        y=CENTER2-49;
+                win=map[x+220][y];
+                loss=map2[x+220][y];
+                if((win+loss) >= 1.0 )
+                        {
+                        
+                        pofb=(win+loss)/ttp; // P(B)
+                        pofbga=win/twtp;     // P(B|A)
+                        val=(pofa*pofbga/pofb); // Bayes applied
+                        globalsum+=val;
+                        globalcount+=1.0;
+
+                        }
+                else
+                        sumnew+=1.0;
+                }
+
+
+        for(x=0;x<=gcmaxsamples;x++)
+                {
+                y=(c42[ref-x]/c42[ref]-1.0)*mapscale[40]+CENTER3;
+                if(y > CENTER3+49)
+                        y=CENTER3+49;
+                if( y < CENTER3-49)
+                        y=CENTER3-49;
+                win=map[x+160][y];
+                loss=map2[x+160][y];
+                if((win+loss) >= 1.0 )
+                        {
+                        
+                        pofb=(win+loss)/ttp; // P(B)
+                        pofbga=win/twtp;     // P(B|A)
+                        val=(pofa*pofbga/pofb); // Bayes applied
+                        globalsum+=val;
+                        globalcount+=1.0;
+
+                        }
+                else
+                        sumnew+=1.0;
+                }
+        for(x=0;x<=gcmaxsamples;x++)
+                {
+                y=(c43[ref-x]/c43[ref]-1.0)*mapscale[41]+CENTER3;
+                if(y > CENTER3+49)
+                        y=CENTER3+49;
+                if( y < CENTER3-49)
+                        y=CENTER3-49;
+                win=map[x+180][y];
+                loss=map2[x+180][y];
+                if((win+loss) >= 1.0 )
+                        {
+                        
+                        pofb=(win+loss)/ttp; // P(B)
+                        pofbga=win/twtp;     // P(B|A)
+                        val=(pofa*pofbga/pofb); // Bayes applied
+                        globalsum+=val;
+                        globalcount+=1.0;
+
+                        }
+                else
+                        sumnew+=1.0;
+                }
+        for(x=0;x<=gcmaxsamples;x++)
+                {
+                y=(c44[ref-x]/c44[ref]-1.0)*mapscale[42]+CENTER3;
+                if(y > CENTER3+49)
+                        y=CENTER3+49;
+                if( y < CENTER3-49)
+                        y=CENTER3-49;
+                win=map[x+200][y];
+                loss=map2[x+200][y];
+                if((win+loss) >= 1.0 )
+                        {
+                        
+                        pofb=(win+loss)/ttp; // P(B)
+                        pofbga=win/twtp;     // P(B|A)
+                        val=(pofa*pofbga/pofb); // Bayes applied
+                        globalsum+=val;
+                        globalcount+=1.0;
+
+                        }
+                else
+                        sumnew+=1.0;
+                }
+        for(x=0;x<=gcmaxsamples;x++)
+                {
+                y=(c45[ref-x]/c45[ref]-1.0)*mapscale[43]+CENTER3;
+                if(y > CENTER3+49)
+                        y=CENTER3+49;
+                if( y < CENTER3-49)
+                        y=CENTER3-49;
+                win=map[x+220][y];
+                loss=map2[x+220][y];
+                if((win+loss) >= 1.0 )
+                        {
+                        
+                        pofb=(win+loss)/ttp; // P(B)
+                        pofbga=win/twtp;     // P(B|A)
+                        val=(pofa*pofbga/pofb); // Bayes applied
+                        globalsum+=val;
+                        globalcount+=1.0;
+
+                        }
+                else
+                        sumnew+=1.0;
+                }
+
+        for(x=0;x<=gcmaxsamples;x++)
+                {
+                y=(c46[ref-x]/c46[ref]-1.0)*mapscale[44]+CENTER4;
+                if(y > CENTER4+49)
+                        y=CENTER4+49;
+                if( y < CENTER4-49)
+                        y=CENTER4-49;
+                win=map[x+160][y];
+                loss=map2[x+160][y];
+                if((win+loss) >= 1.0 )
+                        {
+                        
+                        pofb=(win+loss)/ttp; // P(B)
+                        pofbga=win/twtp;     // P(B|A)
+                        val=(pofa*pofbga/pofb); // Bayes applied
+                        globalsum+=val;
+                        globalcount+=1.0;
+
+                        }
+                else
+                        sumnew+=1.0;
+                }
+        for(x=0;x<=gcmaxsamples;x++)
+                {
+                y=(c47[ref-x]/c47[ref]-1.0)*mapscale[45]+CENTER4;
+                if(y > CENTER4+49)
+                        y=CENTER4+49;
+                if( y < CENTER4-49)
+                        y=CENTER4-49;
+                win=map[x+180][y];
+                loss=map2[x+180][y];
+                if((win+loss) >= 1.0 )
+                        {
+                        
+                        pofb=(win+loss)/ttp; // P(B)
+                        pofbga=win/twtp;     // P(B|A)
+                        val=(pofa*pofbga/pofb); // Bayes applied
+                        globalsum+=val;
+                        globalcount+=1.0;
+
+                        }
+                else
+                        sumnew+=1.0;
+                }
+        for(x=0;x<=gcmaxsamples;x++)
+                {
+                y=(c48[ref-x]/c48[ref]-1.0)*mapscale[46]+CENTER4;
+                if(y > CENTER4+49)
+                        y=CENTER4+49;
+                if( y < CENTER4-49)
+                        y=CENTER4-49;
+                win=map[x+200][y];
+                loss=map2[x+200][y];
+                if((win+loss) >= 1.0 )
+                        {
+                        
+                        pofb=(win+loss)/ttp; // P(B)
+                        pofbga=win/twtp;     // P(B|A)
+                        val=(pofa*pofbga/pofb); // Bayes applied
+                        globalsum+=val;
+                        globalcount+=1.0;
+
+                        }
+                else
+                        sumnew+=1.0;
+                }
+        for(x=0;x<=gcmaxsamples;x++)
+                {
+                y=(c49[ref-x]/c49[ref]-1.0)*mapscale[47]+CENTER4;
+                if(y > CENTER4+49)
+                        y=CENTER4+49;
+                if( y < CENTER4-49)
+                        y=CENTER4-49;
+                win=map[x+220][y];
+                loss=map2[x+220][y];
+                if((win+loss) >= 1.0 )
+                        {
+                        
+                        pofb=(win+loss)/ttp; // P(B)
+                        pofbga=win/twtp;     // P(B|A)
+                        val=(pofa*pofbga/pofb); // Bayes applied
+                        globalsum+=val;
+                        globalcount+=1.0;
+
+                        }
+                else
+                        sumnew+=1.0;
+                }
+
+
+        //   ++++++++++++++++++++++++++
+
+
+        for(x=0;x<=gcmaxsamples;x++)
+                {
+                y=(c50[ref-x]/c50[ref]-1.0)*mapscale[48]+CENTER5;
+                if(y > CENTER5+49)
+                        y=CENTER5+49;
+                if( y < CENTER5-49)
+                        y=CENTER5-49;
+                win=map[x][y];
+                loss=map2[x][y];
+                if((win+loss) >= 1.0 )
+                        {
+                        pofa=.54; // raw P(A)
+                        pofb=(win+loss)/ttp; // P(B)
+                        pofbga=win/twtp;     // P(B|A)
+                        val=(pofa*pofbga/pofb); // Bayes applied
+                        globalsum+=val;
+                        globalcount+=1.0;
+                        }
+                else
+                        sumnew+=1.0;
+                }
+        for(x=0;x<=gcmaxsamples;x++)
+                {
+                y=(c51[ref-x]/c51[ref]-1.0)*mapscale[49]+CENTER5;
+                if(y > CENTER5+49)
+                        y=CENTER5+49;
+                if( y < CENTER5-49)
+                        y=CENTER5-49;
+                win=map[x+20][y];
+                loss=map2[x+20][y];
+                if((win+loss) >= 1.0 )
+                        {
+                        
+                        pofb=(win+loss)/ttp; // P(B)
+                        pofbga=win/twtp;     // P(B|A)
+                        val=(pofa*pofbga/pofb); // Bayes applied
+                        globalsum+=val;
+                        globalcount+=1.0;
+
+                        }
+                else
+                        sumnew+=1.0;
+                }
+        for(x=0;x<=gcmaxsamples;x++)
+                {
+                y=(c52[ref-x]/c52[ref]-1.0)*mapscale[50]+CENTER5;
+                if(y > CENTER5+49)
+                        y=CENTER5+49;
+                if( y < CENTER5-49)
+                        y=CENTER5-49;
+                win=map[x+40][y];
+                loss=map2[x+40][y];
+                if((win+loss) >= 1.0 )
+                        {
+                        
+                        pofb=(win+loss)/ttp; // P(B)
+                        pofbga=win/twtp;     // P(B|A)
+                        val=(pofa*pofbga/pofb); // Bayes applied
+                        globalsum+=val;
+                        globalcount+=1.0;
+
+                        }
+                else
+                        sumnew+=1.0;
+                }
+        for(x=0;x<=gcmaxsamples;x++)
+                {
+                y=(c53[ref-x]/c53[ref]-1.0)*mapscale[51]+CENTER5;
+                if(y > CENTER5+49)
+                        y=CENTER5+49;
+                if( y < CENTER5-49)
+                        y=CENTER5-49;
+                win=map[x+60][y];
+                loss=map2[x+60][y];
+                if((win+loss) >= 1.0 )
+                        {
+                        
+                        pofb=(win+loss)/ttp; // P(B)
+                        pofbga=win/twtp;     // P(B|A)
+                        val=(pofa*pofbga/pofb); // Bayes applied
+                        globalsum+=val;
+                        globalcount+=1.0;
+
+                        }
+                else
+                        sumnew+=1.0;
+                }
+
+        for(x=0;x<=gcmaxsamples;x++)
+                {
+                y=(c54[ref-x]/c54[ref]-1.0)*mapscale[52]+CENTER6;
+                if(y > CENTER6+49)
+                        y=CENTER6+49;
+                if( y < CENTER6-49)
+                        y=CENTER6-49;
+                win=map[x][y];
+                loss=map2[x][y];
+                if((win+loss) >= 1.0 )
+                        {
+                        
+                        pofb=(win+loss)/ttp; // P(B)
+                        pofbga=win/twtp;     // P(B|A)
+                        val=(pofa*pofbga/pofb); // Bayes applied
+                        globalsum+=val;
+                        globalcount+=1.0;
+
+                        }
+                else
+                        sumnew+=1.0;
+                }
+        for(x=0;x<=gcmaxsamples;x++)
+                {
+                y=(c55[ref-x]/c55[ref]-1.0)*mapscale[53]+CENTER6;
+                if(y > CENTER6+49)
+                        y=CENTER6+49;
+                if( y < CENTER6-49)
+                        y=CENTER6-49;
+                win=map[x+20][y];
+                loss=map2[x+20][y];
+                if((win+loss) >= 1.0 )
+                        {
+                        
+                        pofb=(win+loss)/ttp; // P(B)
+                        pofbga=win/twtp;     // P(B|A)
+                        val=(pofa*pofbga/pofb); // Bayes applied
+                        globalsum+=val;
+                        globalcount+=1.0;
+
+                        }
+                else
+                        sumnew+=1.0;
+                }
+        for(x=0;x<=gcmaxsamples;x++)
+                {
+                y=(c56[ref-x]/c56[ref]-1.0)*mapscale[54]+CENTER6;
+                if(y > CENTER6+49)
+                        y=CENTER6+49;
+                if( y < CENTER6-49)
+                        y=CENTER6-49;
+                win=map[x+40][y];
+                loss=map2[x+40][y];
+                if((win+loss) >= 1.0 )
+                        {
+                        
+                        pofb=(win+loss)/ttp; // P(B)
+                        pofbga=win/twtp;     // P(B|A)
+                        val=(pofa*pofbga/pofb); // Bayes applied
+                        globalsum+=val;
+                        globalcount+=1.0;
+
+                        }
+                else
+                        sumnew+=1.0;
+                }
+        for(x=0;x<=gcmaxsamples;x++)
+                {
+                y=(c57[ref-x]/c57[ref]-1.0)*mapscale[55]+CENTER6;
+                if(y > CENTER6+49)
+                        y=CENTER6+49;
+                if( y < CENTER6-49)
+                        y=CENTER6-49;
+                win=map[x+60][y];
+                loss=map2[x+60][y];
+                if((win+loss) >= 1.0 )
+                        {
+                        
+                        pofb=(win+loss)/ttp; // P(B)
+                        pofbga=win/twtp;     // P(B|A)
+                        val=(pofa*pofbga/pofb); // Bayes applied
+                        globalsum+=val;
+                        globalcount+=1.0;
+
+                        }
+                else
+                        sumnew+=1.0;
+                }
+
+
+        for(x=0;x<=gcmaxsamples;x++)
+                {
+                y=(c58[ref-x]/c58[ref]-1.0)*mapscale[0]+CENTER7;
+                if(y > CENTER7+49)
+                        y=CENTER7+49;
+                if( y < CENTER7-49)
+                        y=CENTER7-49;
+                win=map[x][y];
+                loss=map2[x][y];
+                if((win+loss) >= 1.0 )
+                        {
+                        
+                        pofb=(win+loss)/ttp; // P(B)
+                        pofbga=win/twtp;     // P(B|A)
+                        val=(pofa*pofbga/pofb); // Bayes applied
+                        globalsum+=val;
+                        globalcount+=1.0;
+
+                        }
+                else
+                        sumnew+=1.0;
+                }
+        for(x=0;x<=gcmaxsamples;x++)
+                {
+                y=(c59[ref-x]/c59[ref]-1.0)*mapscale[0]+CENTER7;
+                if(y > CENTER7+49)
+                        y=CENTER7+49;
+                if( y < CENTER7-49)
+                        y=CENTER7-49;
+                win=map[x+20][y];
+                loss=map2[x+20][y];
+                if((win+loss) >= 1.0 )
+                        {
+                        
+                        pofb=(win+loss)/ttp; // P(B)
+                        pofbga=win/twtp;     // P(B|A)
+                        val=(pofa*pofbga/pofb); // Bayes applied
+                        globalsum+=val;
+                        globalcount+=1.0;
+
+                        }
+                else
+                        sumnew+=1.0;
+                }
+        for(x=0;x<=gcmaxsamples;x++)
+                {
+                y=(c60[ref-x]/c60[ref]-1.0)*mapscale[0]+CENTER7;
+                if(y > CENTER7+49)
+                        y=CENTER7+49;
+                if( y < CENTER7-49)
+                        y=CENTER7-49;
+                win=map[x+40][y];
+                loss=map2[x+40][y];
+                if((win+loss) >= 1.0 )
+                        {
+                        
+                        pofb=(win+loss)/ttp; // P(B)
+                        pofbga=win/twtp;     // P(B|A)
+                        val=(pofa*pofbga/pofb); // Bayes applied
+                        globalsum+=val;
+                        globalcount+=1.0;
+
+                        }
+                else
+                        sumnew+=1.0;
+                }
+        for(x=0;x<=gcmaxsamples;x++)
+                {
+                y=(c61[ref-x]/c61[ref]-1.0)*mapscale[0]+CENTER7;
+                if(y > CENTER7+49)
+                        y=CENTER7+49;
+                if( y < CENTER7-49)
+                        y=CENTER7-49;
+                win=map[x+60][y];
+                loss=map2[x+60][y];
+                if((win+loss) >= 1.0 )
+                        {
+                        
+                        pofb=(win+loss)/ttp; // P(B)
+                        pofbga=win/twtp;     // P(B|A)
+                        val=(pofa*pofbga/pofb); // Bayes applied
+                        globalsum+=val;
+                        globalcount+=1.0;
+
+                        }
+                else
+                        sumnew+=1.0;
+                }
+
+        for(x=0;x<=gcmaxsamples;x++)
+                {
+                y=(c62[ref-x]/c62[ref]-1.0)*mapscale[0]+CENTER8;
+                if(y > CENTER8+49)
+                        y=CENTER8+49;
+                if( y < CENTER8-49)
+                        y=CENTER8-49;
+                win=map[x][y];
+                loss=map2[x][y];
+                if((win+loss) >= 1.0 )
+                        {
+                        
+                        pofb=(win+loss)/ttp; // P(B)
+                        pofbga=win/twtp;     // P(B|A)
+                        val=(pofa*pofbga/pofb); // Bayes applied
+                        globalsum+=val;
+                        globalcount+=1.0;
+
+                        }
+                else
+                        sumnew+=1.0;
+                }
+        for(x=0;x<=gcmaxsamples;x++)
+                {
+                y=(c63[ref-x]/c63[ref]-1.0)*mapscale[0]+CENTER8;
+                if(y > CENTER8+49)
+                        y=CENTER8+49;
+                if( y < CENTER8-49)
+                        y=CENTER8-49;
+                win=map[x+20][y];
+                loss=map2[x+20][y];
+                if((win+loss) >= 1.0 )
+                        {
+                        
+                        pofb=(win+loss)/ttp; // P(B)
+                        pofbga=win/twtp;     // P(B|A)
+                        val=(pofa*pofbga/pofb); // Bayes applied
+                        globalsum+=val;
+                        globalcount+=1.0;
+
+                        }
+                else
+                        sumnew+=1.0;
+                }
+        for(x=0;x<=gcmaxsamples;x++)
+                {
+                y=(c64[ref-x]/c64[ref]-1.0)*mapscale[0]+CENTER8;
+                if(y > CENTER8+49)
+                        y=CENTER8+49;
+                if( y < CENTER8-49)
+                        y=CENTER8-49;
+                win=map[x+40][y];
+                loss=map2[x+40][y];
+                if((win+loss) >= 1.0 )
+                        {
+                        
+                        pofb=(win+loss)/ttp; // P(B)
+                        pofbga=win/twtp;     // P(B|A)
+                        val=(pofa*pofbga/pofb); // Bayes applied
+                        globalsum+=val;
+                        globalcount+=1.0;
+
+                        }
+                else
+                        sumnew+=1.0;
+                }
+        for(x=0;x<=gcmaxsamples;x++)
+                {
+                y=(c65[ref-x]/c65[ref]-1.0)*mapscale[0]+CENTER8;
+                if(y > CENTER8+49)
+                        y=CENTER8+49;
+                if( y < CENTER8-49)
+                        y=CENTER8-49;
+                win=map[x+60][y];
+                loss=map2[x+60][y];
+                if((win+loss) >= 1.0 )
+                        {
+                        
+                        pofb=(win+loss)/ttp; // P(B)
+                        pofbga=win/twtp;     // P(B|A)
+                        val=(pofa*pofbga/pofb); // Bayes applied
+                        globalsum+=val;
+                        globalcount+=1.0;
+
+                        }
+                else
+                        sumnew+=1.0;
+                }
+
+
+        for(x=0;x<=gcmaxsamples;x++)
+                {
+                y=(c66[ref-x]/c66[ref]-1.0)*mapscale[0]+CENTER5;
+                if(y > CENTER5+49)
+                        y=CENTER5+49;
+                if( y < CENTER5-49)
+                        y=CENTER5-49;
+                win=map[x+80][y];
+                loss=map2[x+80][y];
+                if((win+loss) >= 1.0 )
+                        {
+                        
+                        pofb=(win+loss)/ttp; // P(B)
+                        pofbga=win/twtp;     // P(B|A)
+                        val=(pofa*pofbga/pofb); // Bayes applied
+                        globalsum+=val;
+                        globalcount+=1.0;
+
+                        }
+                else
+                        sumnew+=1.0;
+                }
+        for(x=0;x<=gcmaxsamples;x++)
+                {
+                y=(c67[ref-x]/c67[ref]-1.0)*mapscale[0]+CENTER5;
+                if(y > CENTER5+49)
+                        y=CENTER5+49;
+                if( y < CENTER5-49)
+                        y=CENTER5-49;
+                win=map[x+100][y];
+                loss=map2[x+100][y];
+                if((win+loss) >= 1.0 )
+                        {
+                        
+                        pofb=(win+loss)/ttp; // P(B)
+                        pofbga=win/twtp;     // P(B|A)
+                        val=(pofa*pofbga/pofb); // Bayes applied
+                        globalsum+=val;
+                        globalcount+=1.0;
+
+                        }
+                else
+                        sumnew+=1.0;
+                }
+        for(x=0;x<=gcmaxsamples;x++)
+                {
+                y=(c68[ref-x]/c68[ref]-1.0)*mapscale[0]+CENTER5;
+                if(y > CENTER5+49)
+                        y=CENTER5+49;
+                if( y < CENTER5-49)
+                        y=CENTER5-49;
+                win=map[x+120][y];
+                loss=map2[x+120][y];
+                if((win+loss) >= 1.0 )
+                        {
+                        
+                        pofb=(win+loss)/ttp; // P(B)
+                        pofbga=win/twtp;     // P(B|A)
+                        val=(pofa*pofbga/pofb); // Bayes applied
+                        globalsum+=val;
+                        globalcount+=1.0;
+
+                        }
+                else
+                        sumnew+=1.0;
+                }
+        for(x=0;x<=gcmaxsamples;x++)
+                {
+                y=(c69[ref-x]/c69[ref]-1.0)*mapscale[0]+CENTER5;
+                if(y > CENTER5+49)
+                        y=CENTER5+49;
+                if( y < CENTER5-49)
+                        y=CENTER5-49;
+                win=map[x+140][y];
+                loss=map2[x+140][y];
+                if((win+loss) >= 1.0 )
+                        {
+                        
+                        pofb=(win+loss)/ttp; // P(B)
+                        pofbga=win/twtp;     // P(B|A)
+                        val=(pofa*pofbga/pofb); // Bayes applied
+                        globalsum+=val;
+                        globalcount+=1.0;
+
+                        }
+                else
+                        sumnew+=1.0;
+                }
+
+        for(x=0;x<=gcmaxsamples;x++)
+                {
+                y=(c70[ref-x]/c70[ref]-1.0)*mapscale[0]+CENTER6;
+                if(y > CENTER6+49)
+                        y=CENTER6+49;
+                if( y < CENTER6-49)
+                        y=CENTER6-49;
+                win=map[x+80][y];
+                loss=map2[x+80][y];
+                if((win+loss) >= 1.0 )
+                        {
+                        
+                        pofb=(win+loss)/ttp; // P(B)
+                        pofbga=win/twtp;     // P(B|A)
+                        val=(pofa*pofbga/pofb); // Bayes applied
+                        globalsum+=val;
+                        globalcount+=1.0;
+
+                        }
+                else
+                        sumnew+=1.0;
+                }
+        for(x=0;x<=gcmaxsamples;x++)
+                {
+                y=(c71[ref-x]/c71[ref]-1.0)*mapscale[0]+CENTER6;
+                if(y > CENTER6+49)
+                        y=CENTER6+49;
+                if( y < CENTER6-49)
+                        y=CENTER6-49;
+                win=map[x+100][y];
+                loss=map2[x+100][y];
+                if((win+loss) >= 1.0 )
+                        {
+                        
+                        pofb=(win+loss)/ttp; // P(B)
+                        pofbga=win/twtp;     // P(B|A)
+                        val=(pofa*pofbga/pofb); // Bayes applied
+                        globalsum+=val;
+                        globalcount+=1.0;
+
+                        }
+                else
+                        sumnew+=1.0;
+                }
+        for(x=0;x<=gcmaxsamples;x++)
+                {
+                y=(c72[ref-x]/c72[ref]-1.0)*mapscale[0]+CENTER6;
+                if(y > CENTER6+49)
+                        y=CENTER6+49;
+                if( y < CENTER6-49)
+                        y=CENTER6-49;
+                win=map[x+120][y];
+                loss=map2[x+120][y];
+                if((win+loss) >= 1.0 )
+                        {
+                        
+                        pofb=(win+loss)/ttp; // P(B)
+                        pofbga=win/twtp;     // P(B|A)
+                        val=(pofa*pofbga/pofb); // Bayes applied
+                        globalsum+=val;
+                        globalcount+=1.0;
+
+                        }
+                else
+                        sumnew+=1.0;
+                }
+        for(x=0;x<=gcmaxsamples;x++)
+                {
+                y=(c73[ref-x]/c73[ref]-1.0)*mapscale[0]+CENTER6;
+                if(y > CENTER6+49)
+                        y=CENTER6+49;
+                if( y < CENTER6-49)
+                        y=CENTER6-49;
+                win=map[x+140][y];
+                loss=map2[x+140][y];
+                if((win+loss) >= 1.0 )
+                        {
+                        
+                        pofb=(win+loss)/ttp; // P(B)
+                        pofbga=win/twtp;     // P(B|A)
+                        val=(pofa*pofbga/pofb); // Bayes applied
+                        globalsum+=val;
+                        globalcount+=1.0;
+
+                        }
+                else
+                        sumnew+=1.0;
+                }
+        for(x=0;x<=gcmaxsamples;x++)
+                {
+                y=(c74[ref-x]/c74[ref]-1.0)*mapscale[0]+CENTER7;
+                if(y > CENTER7+49)
+                        y=CENTER7+49;
+                if( y < CENTER7-49)
+                        y=CENTER7-49;
+                win=map[x+80][y];
+                loss=map2[x+80][y];
+                if((win+loss) >= 1.0 )
+                        {
+                        
+                        pofb=(win+loss)/ttp; // P(B)
+                        pofbga=win/twtp;     // P(B|A)
+                        val=(pofa*pofbga/pofb); // Bayes applied
+                        globalsum+=val;
+                        globalcount+=1.0;
+
+                        }
+                else
+                        sumnew+=1.0;
+                }
+        for(x=0;x<=gcmaxsamples;x++)
+                {
+                y=(c75[ref-x]/c75[ref]-1.0)*mapscale[0]+CENTER7;
+                if(y > CENTER7+49)
+                        y=CENTER7+49;
+                if( y < CENTER7-49)
+                        y=CENTER7-49;
+                win=map[x+100][y];
+                loss=map2[x+100][y];
+                if((win+loss) >= 1.0 )
+                        {
+                        
+                        pofb=(win+loss)/ttp; // P(B)
+                        pofbga=win/twtp;     // P(B|A)
+                        val=(pofa*pofbga/pofb); // Bayes applied
+                        globalsum+=val;
+                        globalcount+=1.0;
+
+                        }
+                else
+                        sumnew+=1.0;
+                }
+        for(x=0;x<=gcmaxsamples;x++)
+                {
+                y=(c76[ref-x]/c76[ref]-1.0)*mapscale[0]+CENTER7;
+                if(y > CENTER7+49)
+                        y=CENTER7+49;
+                if( y < CENTER7-49)
+                        y=CENTER7-49;
+                win=map[x+120][y];
+                loss=map2[x+120][y];
+                if((win+loss) >= 1.0 )
+                        {
+                        
+                        pofb=(win+loss)/ttp; // P(B)
+                        pofbga=win/twtp;     // P(B|A)
+                        val=(pofa*pofbga/pofb); // Bayes applied
+                        globalsum+=val;
+                        globalcount+=1.0;
+
+                        }
+                else
+                        sumnew+=1.0;
+                }
+        for(x=0;x<=gcmaxsamples;x++)
+                {
+                y=(c77[ref-x]/c77[ref]-1.0)*mapscale[0]+CENTER7;
+                if(y > CENTER7+49)
+                        y=CENTER7+49;
+                if( y < CENTER7-49)
+                        y=CENTER7-49;
+                win=map[x+140][y];
+                loss=map2[x+140][y];
+                if((win+loss) >= 1.0 )
+                        {
+                        
+                        pofb=(win+loss)/ttp; // P(B)
+                        pofbga=win/twtp;     // P(B|A)
+                        val=(pofa*pofbga/pofb); // Bayes applied
+                        globalsum+=val;
+                        globalcount+=1.0;
+
+                        }
+                else
+                        sumnew+=1.0;
+                }
+
+        for(x=0;x<=gcmaxsamples;x++)
+                {
+                y=(c78[ref-x]/c78[ref]-1.0)*mapscale[0]+CENTER8;
+                if(y > CENTER8+49)
+                        y=CENTER8+49;
+                if( y < CENTER8-49)
+                        y=CENTER8-49;
+                win=map[x+80][y];
+                loss=map2[x+80][y];
+                if((win+loss) >= 1.0 )
+                        {
+                        
+                        pofb=(win+loss)/ttp; // P(B)
+                        pofbga=win/twtp;     // P(B|A)
+                        val=(pofa*pofbga/pofb); // Bayes applied
+                        globalsum+=val;
+                        globalcount+=1.0;
+
+                        }
+                else
+                        sumnew+=1.0;
+                }
+        for(x=0;x<=gcmaxsamples;x++)
+                {
+                y=(c79[ref-x]/c79[ref]-1.0)*mapscale[0]+CENTER8;
+                if(y > CENTER8+49)
+                        y=CENTER8+49;
+                if( y < CENTER8-49)
+                        y=CENTER8-49;
+                win=map[x+100][y];
+                loss=map2[x+100][y];
+                if((win+loss) >= 1.0 )
+                        {
+                        
+                        pofb=(win+loss)/ttp; // P(B)
+                        pofbga=win/twtp;     // P(B|A)
+                        val=(pofa*pofbga/pofb); // Bayes applied
+                        globalsum+=val;
+                        globalcount+=1.0;
+
+                        }
+                else
+                        sumnew+=1.0;
+                }
+        for(x=0;x<=gcmaxsamples;x++)
+                {
+                y=(c80[ref-x]/c80[ref]-1.0)*mapscale[0]+CENTER8;
+                if(y > CENTER8+49)
+                        y=CENTER8+49;
+                if( y < CENTER8-49)
+                        y=CENTER8-49;
+                win=map[x+120][y];
+                loss=map2[x+120][y];
+                if((win+loss) >= 1.0 )
+                        {
+                        
+                        pofb=(win+loss)/ttp; // P(B)
+                        pofbga=win/twtp;     // P(B|A)
+                        val=(pofa*pofbga/pofb); // Bayes applied
+                        globalsum+=val;
+                        globalcount+=1.0;
+
+                        }
+                else
+                        sumnew+=1.0;
+                }
+        for(x=0;x<=gcmaxsamples;x++)
+                {
+                y=(c81[ref-x]/c81[ref]-1.0)*mapscale[0]+CENTER8;
+                if(y > CENTER8+49)
+                        y=CENTER8+49;
+                if( y < CENTER8-49)
+                        y=CENTER8-49;
+                win=map[x+140][y];
+                loss=map2[x+140][y];
+                if((win+loss) >= 1.0 )
+                        {
+                        
+                        pofb=(win+loss)/ttp; // P(B)
+                        pofbga=win/twtp;     // P(B|A)
+                        val=(pofa*pofbga/pofb); // Bayes applied
+                        globalsum+=val;
+                        globalcount+=1.0;
+
+                        }
+                else
+                        sumnew+=1.0;
+                }
+        for(x=0;x<=gcmaxsamples;x++)
+                {
+                y=(c82[ref-x]/c82[ref]-1.0)*mapscale[0]+CENTER5;
+                if(y > CENTER5+49)
+                        y=CENTER5+49;
+                if( y < CENTER5-49)
+                        y=CENTER5-49;
+                win=map[x+160][y];
+                loss=map2[x+160][y];
+                if((win+loss) >= 1.0 )
+                        {
+                        
+                        pofb=(win+loss)/ttp; // P(B)
+                        pofbga=win/twtp;     // P(B|A)
+                        val=(pofa*pofbga/pofb); // Bayes applied
+                        globalsum+=val;
+                        globalcount+=1.0;
+
+                        }
+                else
+                        sumnew+=1.0;
+                }
+        for(x=0;x<=gcmaxsamples;x++)
+                {
+                y=(c83[ref-x]/c83[ref]-1.0)*mapscale[0]+CENTER5;
+                if(y > CENTER5+49)
+                        y=CENTER5+49;
+                if( y < CENTER5-49)
+                        y=CENTER5-49;
+                win=map[x+180][y];
+                loss=map2[x+180][y];
+                if((win+loss) >= 1.0 )
+                        {
+                        
+                        pofb=(win+loss)/ttp; // P(B)
+                        pofbga=win/twtp;     // P(B|A)
+                        val=(pofa*pofbga/pofb); // Bayes applied
+                        globalsum+=val;
+                        globalcount+=1.0;
+
+                        }
+                else
+                        sumnew+=1.0;
+                }
+        for(x=0;x<=gcmaxsamples;x++)
+                {
+                y=(c84[ref-x]/c84[ref]-1.0)*mapscale[0]+CENTER5;
+                if(y > CENTER5+49)
+                        y=CENTER5+49;
+                if( y < CENTER5-49)
+                        y=CENTER5-49;
+                win=map[x+200][y];
+                loss=map2[x+200][y];
+                if((win+loss) >= 1.0 )
+                        {
+                        
+                        pofb=(win+loss)/ttp; // P(B)
+                        pofbga=win/twtp;     // P(B|A)
+                        val=(pofa*pofbga/pofb); // Bayes applied
+                        globalsum+=val;
+                        globalcount+=1.0;
+
+                        }
+                else
+                        sumnew+=1.0;
+                }
+        for(x=0;x<=gcmaxsamples;x++)
+                {
+                y=(c85[ref-x]/c85[ref]-1.0)*mapscale[0]+CENTER5;
+                if(y > CENTER5+49)
+                        y=CENTER5+49;
+                if( y < CENTER5-49)
+                        y=CENTER5-49;
+                win=map[x+220][y];
+                loss=map2[x+220][y];
+                if((win+loss) >= 1.0 )
+                        {
+                        
+                        pofb=(win+loss)/ttp; // P(B)
+                        pofbga=win/twtp;     // P(B|A)
+                        val=(pofa*pofbga/pofb); // Bayes applied
+                        globalsum+=val;
+                        globalcount+=1.0;
+
+                        }
+                else
+                        sumnew+=1.0;
+                }
+
+        for(x=0;x<=gcmaxsamples;x++)
+                {
+                y=(c86[ref-x]/c86[ref]-1.0)*mapscale[0]+CENTER6;
+                if(y > CENTER6+49)
+                        y=CENTER6+49;
+                if( y < CENTER6-49)
+                        y=CENTER6-49;
+                win=map[x+160][y];
+                loss=map2[x+160][y];
+                if((win+loss) >= 1.0 )
+                        {
+                        
+                        pofb=(win+loss)/ttp; // P(B)
+                        pofbga=win/twtp;     // P(B|A)
+                        val=(pofa*pofbga/pofb); // Bayes applied
+                        globalsum+=val;
+                        globalcount+=1.0;
+
+                        }
+                else
+                        sumnew+=1.0;
+                }
+        for(x=0;x<=gcmaxsamples;x++)
+                {
+                y=(c87[ref-x]/c87[ref]-1.0)*mapscale[0]+CENTER6;
+                if(y > CENTER6+49)
+                        y=CENTER6+49;
+                if( y < CENTER6-49)
+                        y=CENTER6-49;
+                win=map[x+180][y];
+                loss=map2[x+180][y];
+                if((win+loss) >= 1.0 )
+                        {
+                        
+                        pofb=(win+loss)/ttp; // P(B)
+                        pofbga=win/twtp;     // P(B|A)
+                        val=(pofa*pofbga/pofb); // Bayes applied
+                        globalsum+=val;
+                        globalcount+=1.0;
+
+                        }
+                else
+                        sumnew+=1.0;
+                }
+        for(x=0;x<=gcmaxsamples;x++)
+                {
+                y=(c88[ref-x]/c88[ref]-1.0)*mapscale[0]+CENTER6;
+                if(y > CENTER6+49)
+                        y=CENTER6+49;
+                if( y < CENTER6-49)
+                        y=CENTER6-49;
+                win=map[x+200][y];
+                loss=map2[x+200][y];
+                if((win+loss) >= 1.0 )
+                        {
+                        
+                        pofb=(win+loss)/ttp; // P(B)
+                        pofbga=win/twtp;     // P(B|A)
+                        val=(pofa*pofbga/pofb); // Bayes applied
+                        globalsum+=val;
+                        globalcount+=1.0;
+
+                        }
+                else
+                        sumnew+=1.0;
+                }
+        for(x=0;x<=gcmaxsamples;x++)
+                {
+                y=(c89[ref-x]/c89[ref]-1.0)*mapscale[0]+CENTER6;
+                if(y > CENTER6+49)
+                        y=CENTER6+49;
+                if( y < CENTER6-49)
+                        y=CENTER6-49;
+                win=map[x+220][y];
+                loss=map2[x+220][y];
+                if((win+loss) >= 1.0 )
+                        {
+                        
+                        pofb=(win+loss)/ttp; // P(B)
+                        pofbga=win/twtp;     // P(B|A)
+                        val=(pofa*pofbga/pofb); // Bayes applied
+                        globalsum+=val;
+                        globalcount+=1.0;
+
+                        }
+                else
+                        sumnew+=1.0;
+                }
+
+
+        for(x=0;x<=gcmaxsamples;x++)
+                {
+                y=(c90[ref-x]/c90[ref]-1.0)*mapscale[0]+CENTER7;
+                if(y > CENTER7+49)
+                        y=CENTER7+49;
+                if( y < CENTER7-49)
+                        y=CENTER7-49;
+                win=map[x+160][y];
+                loss=map2[x+160][y];
+                if((win+loss) >= 1.0 )
+                        {
+                        
+                        pofb=(win+loss)/ttp; // P(B)
+                        pofbga=win/twtp;     // P(B|A)
+                        val=(pofa*pofbga/pofb); // Bayes applied
+                        globalsum+=val;
+                        globalcount+=1.0;
+
+                        }
+                else
+                        sumnew+=1.0;
+                }
+        for(x=0;x<=gcmaxsamples;x++)
+                {
+                y=(c91[ref-x]/c91[ref]-1.0)*mapscale[0]+CENTER7;
+                if(y > CENTER7+49)
+                        y=CENTER7+49;
+                if( y < CENTER7-49)
+                        y=CENTER7-49;
+                win=map[x+180][y];
+                loss=map2[x+180][y];
+                if((win+loss) >= 1.0 )
+                        {
+                        
+                        pofb=(win+loss)/ttp; // P(B)
+                        pofbga=win/twtp;     // P(B|A)
+                        val=(pofa*pofbga/pofb); // Bayes applied
+                        globalsum+=val;
+                        globalcount+=1.0;
+
+                        }
+                else
+                        sumnew+=1.0;
+                }
+        for(x=0;x<=gcmaxsamples;x++)
+                {
+                y=(c92[ref-x]/c92[ref]-1.0)*mapscale[0]+CENTER7;
+                if(y > CENTER7+49)
+                        y=CENTER7+49;
+                if( y < CENTER7-49)
+                        y=CENTER7-49;
+                win=map[x+200][y];
+                loss=map2[x+200][y];
+                if((win+loss) >= 1.0 )
+                        {
+                        
+                        pofb=(win+loss)/ttp; // P(B)
+                        pofbga=win/twtp;     // P(B|A)
+                        val=(pofa*pofbga/pofb); // Bayes applied
+                        globalsum+=val;
+                        globalcount+=1.0;
+
+                        }
+                else
+                        sumnew+=1.0;
+                }
+        for(x=0;x<=gcmaxsamples;x++)
+                {
+                y=(c93[ref-x]/c93[ref]-1.0)*mapscale[0]+CENTER7;
+                if(y > CENTER7+49)
+                        y=CENTER7+49;
+                if( y < CENTER7-49)
+                        y=CENTER7-49;
+                win=map[x+220][y];
+                loss=map2[x+220][y];
+                if((win+loss) >= 1.0 )
+                        {
+                        
+                        pofb=(win+loss)/ttp; // P(B)
+                        pofbga=win/twtp;     // P(B|A)
+                        val=(pofa*pofbga/pofb); // Bayes applied
+                        globalsum+=val;
+                        globalcount+=1.0;
+
+                        }
+                else
+                        sumnew+=1.0;
+                }
+
+        for(x=0;x<=gcmaxsamples;x++)
+                {
+                y=(c94[ref-x]/c94[ref]-1.0)*mapscale[0]+CENTER8;
+                if(y > CENTER8+49)
+                        y=CENTER8+49;
+                if( y < CENTER8-49)
+                        y=CENTER8-49;
+                win=map[x+160][y];
+                loss=map2[x+160][y];
+                if((win+loss) >= 1.0 )
+                        {
+                        
+                        pofb=(win+loss)/ttp; // P(B)
+                        pofbga=win/twtp;     // P(B|A)
+                        val=(pofa*pofbga/pofb); // Bayes applied
+                        globalsum+=val;
+                        globalcount+=1.0;
+
+                        }
+                else
+                        sumnew+=1.0;
+                }
+        for(x=0;x<=gcmaxsamples;x++)
+                {
+                y=(c95[ref-x]/c95[ref]-1.0)*mapscale[0]+CENTER8;
+                if(y > CENTER8+49)
+                        y=CENTER8+49;
+                if( y < CENTER8-49)
+                        y=CENTER8-49;
+                win=map[x+180][y];
+                loss=map2[x+180][y];
+                if((win+loss) >= 1.0 )
+                        {
+                        
+                        pofb=(win+loss)/ttp; // P(B)
+                        pofbga=win/twtp;     // P(B|A)
+                        val=(pofa*pofbga/pofb); // Bayes applied
+                        globalsum+=val;
+                        globalcount+=1.0;
+
+                        }
+                else
+                        sumnew+=1.0;
+                }
+        for(x=0;x<=gcmaxsamples;x++)
+                {
+                y=(c96[ref-x]/c96[ref]-1.0)*mapscale[0]+CENTER8;
+                if(y > CENTER8+49)
+                        y=CENTER8+49;
+                if( y < CENTER8-49)
+                        y=CENTER8-49;
+                win=map[x+200][y];
+                loss=map2[x+200][y];
+                if((win+loss) >= 1.0 )
+                        {
+                        
+                        pofb=(win+loss)/ttp; // P(B)
+                        pofbga=win/twtp;     // P(B|A)
+                        val=(pofa*pofbga/pofb); // Bayes applied
+                        globalsum+=val;
+                        globalcount+=1.0;
+
+                        }
+                else
+                        sumnew+=1.0;
+                }
+        for(x=0;x<=gcmaxsamples;x++)
+                {
+                y=(c97[ref-x]/c97[ref]-1.0)*mapscale[0]+CENTER8;
+                if(y > CENTER8+49)
+                        y=CENTER8+49;
+                if( y < CENTER8-49)
+                        y=CENTER8-49;
+                win=map[x+220][y];
+                loss=map2[x+220][y];
+                if((win+loss) >= 1.0 )
+                        {
+                        
+                        pofb=(win+loss)/ttp; // P(B)
+                        pofbga=win/twtp;     // P(B|A)
+                        val=(pofa*pofbga/pofb); // Bayes applied
+                        globalsum+=val;
+                        globalcount+=1.0;
+
+                        }
+                else
+                        sumnew+=1.0;
+                }
+
+
+
+
+        if(globalcount != 0.0)
+                {
+                predraw[ref]=globalsum/globalcount;   // raw .pred
+                }
+	else
+		predraw[ref]=0.0;
+	sumnewcells[ref]=sumnew;
+	return(1);
+	}
+
+
+
+
+
+
+
+
+
+
+
+
+
+calc_fitness_offspring()
+	{
+	int ref;
+	int days=0;
+	int genenum;
+	int maxeverdd=0;
+	int maxddall=-1;
+	float returns=0.0;
+	float sterlall;
+	float count,sum;
+	float segfitness;
+        float win=0.0;
+        float loss=0.0;
+	maxeverdd=-10;
+	count=0.0;
+	sum=0.0;
+	if(fold == 1)
+		{
+		optreturns2=0.0;
+		virgreturns2=0.0;
+		frontoos[ocount]=0.0;
+		moos[ocount]=0.0;
+		moos2[ocount]=0.0;
+		}
+	optreturns2+=((account[nod-((virg+foldshift)+hide)]-account[nod-(hide+(virg+foldshift)+foldwidth)])/(float)(foldwidth)); // pts per day, over opt segment
+	virgreturns2+=(account[nod]-account[nod-(virg+hide)])/(float)(virg+hide);  // pts per day, over verification segment
+	frontoos[ocount]+=(account[nod-(hide+virg+foldwidth+learn)]-account[simstart])/(float)((nod-(hide+virg+foldwidth+learn))-simstart);
+	moos[ocount]+=(account[moose]-account[moosb])/(moose-moosb);
+	moos2[ocount]+=(account[moose2]-account[moosb2])/(moose2-moosb2);
+	if(mdd20a < maxeverdd)
+		maxeverdd=mdd20a;
+	if(mdd60a < maxeverdd)
+		maxeverdd=mdd60a;
+	if(mdd120a < maxeverdd)
+		maxeverdd=mdd120a;
+	if(mdd20 < maxddall)
+		maxddall=mdd20;
+	if(mdd60 < maxddall)
+		maxddall=mdd60;
+	if(mdd120 < maxddall)
+		maxddall=mdd120;
+	sterlall=(((account[simstop]-account[simstart])/(simstop-simstart)))/-maxddall;
+	if(lotcount < mltq )
+		sterlall=0.0;
+	if(sterlall > bsad)
+		{
+		bsad=sterlall;
+		}
+	check_activity();
+	if(fold == 1)
+		fitness_offspring=0.0;
+	for(ref=nod-(hide+virg+foldshift+foldwidth);ref<=nod-(virg+foldshift+hide);ref++)
+		{
+          if(ref >= moosb2 && ref <= moose2)
+			continue; // middle oos segment2
+		if(ref >= moosb && ref <= moose)
+			continue; // middle oos segment
+                if(account[ref]>account[ref-1])   // win
+                        win+=1.0;
+                else
+                        loss+=1.0;
+                fitness_offspring+=account[ref]-account[ref-1];
+		}
+  //      fitness_offspring=win/(win+loss);
+	c_prdcontained();
+	printf("Offspring fitness=%2.4f;max idle:%d days;weights used=%5.0f\n",fitness_offspring,maxdeadrun,weightcount);
+	printf("\n");
+        if(fold == 10)
+     	{
+		vf[ocount]=virgreturns2;
+		oosf[ocount]=optreturns2;
+		oosfitness_offspring=optreturns2;
+		if(fitness_offspring > bestalltime)
+			{
+			bestalltime=fitness_offspring;
+			for(genenum=0;genenum<MAXGENES;genenum++)
+				 besteverchrom[0][genenum]=offspring[genenum];
+			}
+		printf("Best Fitness over Opt. data: %f Best Fitness over All data: %f\n",bestalltime,bsad);
+		printf("           Hit 'x' to stop evolution.\n");
+		printf("           Hit 't' to toggle graphics.\n");
+		printf("           Hit 'p' to pause.........\n");
+		printf("           Hit 'v' to view individual trial solutions\n");
+		printf("           Hit 's' to adjust return stream graphics scale.\n");
+		printf("           Hit 'z' to scale scattergram.\n");
+		printf("           Hit 'a' to advance to next random seeding\n");  
+		printf("           Hit 'h' to toggle hidden data in/out of view.\n");
+		}
+	return(1);
+	}
+
+
+
+calc_fitness_competitor()   // used only during pop initialization and mutation
+	{
+	int ref;
+	int days=0;
+	int genenum;
+	int maxeverdd=0;
+	int maxddall=-1;
+	float optreturns;
+	float returns=0.0;
+	float sterlall;
+	float segfitness;
+        float win=0.0;
+        float loss=0.0;
+	maxeverdd=-10;
+	if(fold == 1)
+		optreturns = 0.0;
+	optreturns+=((account[nod-((virg+foldshift)+hide)]-account[nod-(hide+(virg+foldshift)+foldwidth)])/(float)foldwidth); // ave pts per day, won over opt segment
+	if(mdd20a < maxeverdd)
+		maxeverdd=mdd20a;
+	if(mdd60a < maxeverdd)
+		maxeverdd=mdd60a;
+	if(mdd120a < maxeverdd)
+		maxeverdd=mdd120a;
+	if(mdd20 < maxddall)
+		maxddall=mdd20;
+	if(mdd60 < maxddall)
+		maxddall=mdd60;
+	if(mdd120 < maxddall)
+		maxddall=mdd120;
+	sterlall=(((account[simstop]-account[simstart])/(simstop-simstart)))/-maxddall;
+	if(lotcount < mltq )
+		sterlall=0.0;
+	if(sterlall > bsad)
+		{
+		bsad=sterlall;
+		}
+	check_activity();
+	if(fold == 1)
+		fitness_competitor=0.0;
+	for(ref=nod-(hide+virg+foldshift+foldwidth);ref<=nod-(virg+foldshift+hide);ref++)
+		{
+		if(ref >= moosb2 && ref <= moose2)
+			continue; // middle oos segment2
+		if(ref >= moosb && ref <= moose)
+			continue; // middle oos segment
+                if(account[ref]>account[ref-1])
+                        win+=1.0;
+                else
+                        loss+=1.0;
+                fitness_competitor+=account[ref]-account[ref-1];
+		}
+    //    fitness_competitor=win/(win+loss);
+	c_prdcontained();
+	printf("Max idle:%d days;weights used=%5.0f\n",maxdeadrun,weightcount);
+	printf("\n");
+        if(fold == 10)
+     	{
+		fitness[competitor_ss]=fitness_competitor;
+		oosfitness[competitor_ss]=optreturns;
+		if(fitness_competitor > bestalltime)
+			{
+			bestalltime=fitness_competitor;
+			for(genenum=0;genenum<MAXGENES;genenum++)
+				 besteverchrom[0][genenum]=parent[competitor_ss][genenum];
+			}
+		printf("Best Fitness over Opt. data: %f Best Fitness over All data: %f\n",bestalltime,bsad);
+		}
+	return(1);
+	}
+
+
+
+
+
+
+check_activity()
+	{
+	int x;
+	int same=0;
+	maxdeadrun=0;
+	for(x=simstart+1;x<nod-1;x++)
+		{
+		if(account[x] == account[x-1])
+			{
+			++same;    // ie no trade
+			if(same > maxdeadrun)
+				maxdeadrun=same;
+			}
+		else
+			same=0;
+		}
+	return(1);
+	}
+
+
+havesex()
+	{
+	int mothercomp1;
+	int mothercomp2;
+	int motherss;
+	int fathercomp1;
+	int fathercomp2;
+	int fatherss;
+	int genenum;
+	int breakpt;
+	breakpt=rand()/(32766/MAXGENES);
+	mothercomp1=rand()/(32766/MAXPOPULATION);
+	if(mothercomp1 < 0)
+		  mothercomp1 = 0;
+	if(mothercomp1 > MAXPOPULATION-1)
+		  mothercomp1 = MAXPOPULATION-1;
+	fathercomp1=rand()/(32766/MAXPOPULATION);
+	if(fathercomp1 < 0)
+		  fathercomp1 = 0;
+	if(fathercomp1 > MAXPOPULATION-1)
+		  fathercomp1 = MAXPOPULATION-1;
+	mothercomp2=rand()/(32766/MAXPOPULATION);
+	if(mothercomp2 < 0)
+		  mothercomp2 = 0;
+	if(mothercomp2 > MAXPOPULATION-1)
+		  mothercomp2 = MAXPOPULATION-1;
+	fathercomp2=rand()/(32766/MAXPOPULATION);
+	if(fathercomp2 < 0)
+		  fathercomp2 = 0;
+	if(fathercomp2 > MAXPOPULATION-1)
+		  fathercomp2 = MAXPOPULATION-1;
+	if(fitness[mothercomp1] >= fitness[mothercomp2])
+		motherss=mothercomp1;
+	else
+		motherss=mothercomp2;
+	if(fitness[fathercomp1] >= fitness[fathercomp2])
+		fatherss=fathercomp1;
+	else
+		fatherss=fathercomp2;
+	for(genenum=0;genenum<breakpt;genenum++)
+		  { //  offspring inherits genes from mother
+		  offspring[genenum]=parent[motherss][genenum];
+		  }
+	for(genenum=breakpt;genenum<MAXGENES;genenum++)
+		  { //  offspring inherits genes from father
+		  offspring[genenum]=parent[fatherss][genenum];
+		  }
+	// MUTATE SECTION
+     for(genenum=0;genenum<MAXGENES;genenum++)
+		  {
+		  if(rand() < 32766*mutrate)
+				{
+				offspring[genenum]+=(rand()-1600);
+                                if(genenum==5)
+                                        offspring[5]+=20;
+				if(offspring[genenum] > 32000)
+					 offspring[genenum] = 32000;
+				if(offspring[genenum] < 0)
+					 offspring[genenum] = 0;
+				}
+		  }
+	return(1);
+	}
+
+
+mutate()  //randomly mutates some citizen
+    {     
+	 int genenum;
+	 mutatedflag=0;
+	 competitor_ss=rand()/(32766/MAXPOPULATION);
+	 if(competitor_ss < 0)
+		  competitor_ss = 0;
+	 if(competitor_ss > MAXPOPULATION-1)
+		  competitor_ss = MAXPOPULATION-1;
+	 if(competitor_ss == best_ss) // don't mutate best solution
+		  return(1);
+	 for(genenum=0;genenum<MAXGENES;genenum++)
+		  {
+		  if(rand() < 32766*mutrate)
+				{
+				mutatedflag=1;
+				parent[competitor_ss][genenum]+=(rand()-1600);
+				if(parent[competitor_ss][genenum] > 32000)
+					 parent[competitor_ss][genenum] = 32000;
+				if(parent[competitor_ss][genenum] < 0)
+					 parent[competitor_ss][genenum] = 0;
+				}
+		  }
+	 return(1);
+	 }
+
+
+init_pop()
+	{
+        int genenum;
+        for(ss=0;ss<MAXPOPULATION;ss++)
+		{
+		for(genenum=0;genenum<MAXGENES;genenum++)
+			{
+                        parent[ss][genenum]=rand();
+			}
+		}
+	return(1);
+	}
+
+
+
+draw_it()
+	{
+	char buffer[80];
+	int x,y,xnew,ynew,iht,i,j;
+	int gap;
+        float gthresh;
+	float xscale=200.0/XSIZE;
+        float yscale=.10;
+	int ystart=440;
+	int xstart=220;
+	float ht;
+	int whichmap;
+	char string[30];
+        post_map();
+	count_weights();
+        printf("Enter map to draw: 1=Wins, 2=Losses, 3=W/L, 4=W-L, 5=W/Lthresh: ");
+	gets(string);
+	whichmap=atoi(string);
+        if(whichmap==5)
+                {
+                printf("Enter min cell wins(1.0 to 100.0): ");
+                gets(string);
+                gthresh=atof(string);
+                }
+	_setcolor(15);
+	_moveto(xstart,ystart);
+	for(j=YSIZE-1;j>0;j--)
+		{
+                xnew=xstart+j*.5;
+                ynew=ystart-(j*.5);
+		_moveto(xnew,ynew);
+		for(i=0;i<XSIZE;i++)
+			{
+                        ht=0.0;
+			if(whichmap == 1)
+				ht=map[i][j]*yscale*htscale;
+			if(whichmap == 2)
+				ht=map2[i][j]*yscale*htscale;
+                        if(whichmap == 3)
+                                ht=map3[i][j]*yscale*htscale*100.0;
+			if(whichmap == 4)
+				ht=(map[i][j]-map2[i][j])*yscale*htscale;
+                        if(whichmap == 5)
+                                {
+                                if((map[i][j]) >= gthresh)
+                                      ht=(map[i][j]-map2[i][j])*yscale*htscale;  
+                                else
+                                      ht=0.0;
+                                }
+			if(i == XSIZE-1 && j == YSIZE-1)
+				ht=0.0;
+			iht=ht;
+			x=xnew-(i*xscale);
+			y=ynew-iht;
+			color=g_color(ht);
+                        if(whichmap == 3 || whichmap == 4 || whichmap == 5)
+				color=g2_color(ht);
+			_setcolor(color);
+			_lineto(x,y);
+			}
+		}
+        _setcolor(YELLOW);
+        _moveto(110,30); 
+	_outgtext(istream2);
+        _moveto(110,40);
+	_outgtext(istream3);
+        _moveto(110,50);
+	_outgtext(istream4);
+        _moveto(110,60);
+	_outgtext(istream5);
+        _moveto(110,70); 
+	_outgtext(istream6);
+        _moveto(110,80);
+	_outgtext(istream7);
+        _moveto(110,90);
+	_outgtext(istream8);
+        _moveto(110,100);
+        _outgtext(istream9);
+        _moveto(110,110); 
+        _outgtext(istream21);
+        _moveto(110,120);
+        _outgtext(istream22);
+        _moveto(110,130);
+        _outgtext(istream23);
+        _moveto(110,140);
+        _outgtext(istream24);
+        _moveto(110,150); 
+        _outgtext(istream25);
+        _moveto(110,160);
+        _outgtext(istream26);
+        _moveto(110,170);
+        _outgtext(istream27);
+        _moveto(110,180);
+        _outgtext(istream28);   
+
+        _moveto(520,160); 
+        _outgtext(istream29);
+        _moveto(520,170);
+        _outgtext(istream30);
+        _moveto(520,180);
+        _outgtext(istream31);
+        _moveto(520,190);
+        _outgtext(istream32);
+        _moveto(520,200); 
+        _outgtext(istream33);
+        _moveto(520,210);
+        _outgtext(istream34);
+        _moveto(520,220);
+        _outgtext(istream35);
+        _moveto(520,230);
+        _outgtext(istream36);
+        _moveto(520,240); 
+        _outgtext(istream37);
+        _moveto(520,250);
+        _outgtext(istream38);
+        _moveto(520,260);
+        _outgtext(istream39);
+        _moveto(520,270);
+        _outgtext(istream40);
+        _moveto(520,280); 
+        _outgtext(istream41);
+        _moveto(520,290);
+        _outgtext(istream42);
+        _moveto(520,300);
+        _outgtext(istream43);
+        _moveto(520,310);
+        _outgtext(istream44);   
+
+        _moveto(520,320);
+        _outgtext(istream45);
+        _moveto(520,330);
+        _outgtext(istream46);
+        _moveto(520,340);
+        _outgtext(istream47);
+        _moveto(520,350);
+        _outgtext(istream48);
+        _moveto(520,360);
+        _outgtext(istream49);
+        _moveto(520,370);
+        _outgtext(istream50);
+        _moveto(520,380);
+        _outgtext(istream51);
+        _moveto(520,390);
+        _outgtext(istream52);
+        _moveto(520,400);
+        _outgtext(istream53);
+        _moveto(520,410);
+        _outgtext(istream54);
+        _moveto(520,420);
+        _outgtext(istream55);
+        _moveto(520,430);
+        _outgtext(istream56);
+        _moveto(520,440);
+        _outgtext(istream57);
+        _moveto(520,450);
+        _outgtext(istream58);
+        _moveto(520,460);
+        _outgtext(istream59);
+        _moveto(520,470);
+        _outgtext(istream60);
+
+
+
+
+	return(1);
+	}
+
+draw_it2()
+	{
+	char buffer[80];
+	int x,y,xnew,ynew,iht,i,j;
+	int gap;
+	float xscale=200.0/XSIZE;
+        float yscale=.10;
+        float gthresh;
+	int ystart=440;
+	int xstart=220;
+	float ht;
+	int whichmap;
+	char string[30];
+        post_map();
+	count_weights();
+        printf("Enter map to draw: 1=Wins, 2=Losses, 3=W/L, 4=W-L, 5=W/L thresh: ");
+	gets(string);
+	whichmap=atoi(string);
+        if(whichmap==5)
+                {
+                printf("Enter minimum cell wins (1.0 to 100.0): ");
+                gets(string);
+                gthresh=atof(string);
+                }
+	_setcolor(15);
+	_moveto(xstart,ystart);
+	for(j=YSIZE-1;j>0;j--)
+		{
+                xnew=xstart+j*.5;
+                ynew=ystart-(j*.5);
+		_moveto(xnew,ynew);
+		for(i=0;i<XSIZE;i++)
+			{
+                        ht=0.0;
+			if(whichmap == 1)
+				ht=map[i][j]*yscale*htscale;
+			if(whichmap == 2)
+				ht=map2[i][j]*yscale*htscale;
+                        if(whichmap == 3)
+                                ht=map3[i][j]*yscale*htscale*100.0;
+			if(whichmap == 4)
+				ht=(map[i][j]-map2[i][j])*yscale*htscale;
+                        if(whichmap == 5)
+                                {
+                                if((map[i][j]) >= gthresh)
+                                      ht=(map[i][j]-map2[i][j])*yscale*htscale;  
+                                else
+                                      ht=0.0;
+                                }
+                        if(i == XSIZE-1 && j == YSIZE-1)
+				ht=0.0;
+			iht=ht;
+			x=xnew-(i*xscale);
+			y=ynew-iht;
+			color=g_color(ht);
+			if(whichmap == 3 || whichmap == 4)
+				color=g2_color(ht);
+			_setcolor(color);
+			_lineto(x,y);
+			}
+		}
+        _setcolor(YELLOW);
+        _moveto(110,30); 
+	_outgtext(istream2);
+        _moveto(110,40);
+	_outgtext(istream3);
+        _moveto(110,50);
+	_outgtext(istream4);
+        _moveto(110,60);
+	_outgtext(istream5);
+        _moveto(110,70); 
+	_outgtext(istream6);
+        _moveto(110,80);
+	_outgtext(istream7);
+        _moveto(110,90);
+	_outgtext(istream8);
+        _moveto(110,100);
+        _outgtext(istream9);
+        _moveto(110,110); 
+        _outgtext(istream21);
+        _moveto(110,120);
+        _outgtext(istream22);
+        _moveto(110,130);
+        _outgtext(istream23);
+        _moveto(110,140);
+        _outgtext(istream24);
+        _moveto(110,150); 
+        _outgtext(istream25);
+        _moveto(110,160);
+        _outgtext(istream26);
+        _moveto(110,170);
+        _outgtext(istream27);
+        _moveto(110,180);
+        _outgtext(istream28);   
+        _moveto(520,160); 
+        _outgtext(istream29);
+        _moveto(520,170);
+        _outgtext(istream30);
+        _moveto(520,180);
+        _outgtext(istream31);
+        _moveto(520,190);
+        _outgtext(istream32);
+        _moveto(520,200); 
+        _outgtext(istream33);
+        _moveto(520,210);
+        _outgtext(istream34);
+        _moveto(520,220);
+        _outgtext(istream35);
+        _moveto(520,230);
+        _outgtext(istream36);
+        _moveto(520,240); 
+        _outgtext(istream37);
+        _moveto(520,250);
+        _outgtext(istream38);
+        _moveto(520,260);
+        _outgtext(istream39);
+        _moveto(520,270);
+        _outgtext(istream40);
+        _moveto(520,280); 
+        _outgtext(istream41);
+        _moveto(520,290);
+        _outgtext(istream42);
+        _moveto(520,300);
+        _outgtext(istream43);
+        _moveto(520,310);
+        _outgtext(istream44);   
+
+        _moveto(520,320);
+        _outgtext(istream45);
+        _moveto(520,330);
+        _outgtext(istream46);
+        _moveto(520,340);
+        _outgtext(istream47);
+        _moveto(520,350);
+        _outgtext(istream48);
+        _moveto(520,360);
+        _outgtext(istream49);
+        _moveto(520,370);
+        _outgtext(istream50);
+        _moveto(520,380);
+        _outgtext(istream51);
+        _moveto(520,390);
+        _outgtext(istream52);
+        _moveto(520,400);
+        _outgtext(istream53);
+        _moveto(520,410);
+        _outgtext(istream54);
+        _moveto(520,420);
+        _outgtext(istream55);
+        _moveto(520,430);
+        _outgtext(istream56);
+        _moveto(520,440);
+        _outgtext(istream57);
+        _moveto(520,450);
+        _outgtext(istream58);
+        _moveto(520,460);
+        _outgtext(istream59);
+        _moveto(520,470);
+        _outgtext(istream60);
+
+
+
+
+
+	gets(string);
+	return(1);
+	}
+
+
+
+
+g2_color(ht)
+     float ht;
+     {
+     if(ht == 0)
+		return(15);
+	if(ht < -1)
+		return(12);
+	if(ht >= -1 && ht < 0)
+		return(4);
+	if(ht > 0 && ht <= 1)
+		return(2);
+	if(ht > 1) 
+		return(10);
+	return(0);
+	}
+
+
+
+
+
+
+g_color(ht)
+     float ht;
+     {
+     if(ht == 0)
+		return(15);
+	if(ht > 0 && ht <= 2)
+		return(2);
+	if(ht > 2 && ht < 4)
+		return(3);
+	if(ht > 4 && ht < 6)
+		return(4);
+	if(ht > 6 && ht < 8)
+		return(5);
+	if(ht > 8 && ht < 10)
+		return(6);
+	if(ht > 10 && ht < 12)
+		return(7);
+	if(ht > 12 && ht < 14)
+		return(8);
+	if(ht > 14 && ht < 16)
+		return(9);
+	if(ht > 16 && ht < 18)
+		return(10);
+	if(ht > 18 && ht < 20)
+		return(11);
+	if(ht > 20 && ht < 22)
+		return(12);
+	if(ht > 22 && ht < 24)
+		return(13);
+	if(ht > 24 )
+		return(14);
+	return(0);
+  	}
+
+
+input_pop()
+	{
+	char string[30];
+	int genenum;
+	int x,y;
+	float tmp;
+	long ltmp;
+	float ftmp;
+	genenum=0;
+	clrscr();
+	system("dir *.pop");
+	printf("\n\t\t\tEnter population filename: ");
+	gets(string);
+	prd=fopen(string,"r");
+	if(prd == NULL)
+		{
+		printf("Can't open %s\n",string);
+		delay(2000);
+		return(1);
+		}
+	fscanf(prd,"%s\n",&istream1);
+	fscanf(prd,"%s\n",&istream2);
+	fscanf(prd,"%s\n",&istream3);
+	fscanf(prd,"%s\n",&istream4);
+	fscanf(prd,"%s\n",&istream5);
+	fscanf(prd,"%s\n",&istream6);
+	fscanf(prd,"%s\n",&istream7);
+	fscanf(prd,"%s\n",&istream8);
+	fscanf(prd,"%s\n",&istream9);
+	fscanf(prd,"%ld\n",&ocount);
+	fscanf(prd,"%d\n",&targtype);
+	fscanf(prd,"%f\n",&bsad);
+	fscanf(prd,"%f\n",&bestalltime);
+	fscanf(prd,"%ld\n",&ltmp); // read gcmaxhold
+	gcmaxhold=ltmp;
+	fscanf(prd,"%ld\n",&ltmp); // read gcsmaxhold
+	gcsmaxhold=ltmp;
+	fscanf(prd,"%ld\n",&ltmp); // read gcmaxpass
+	gcmaxpass=ltmp;
+	fscanf(prd,"%f\n",&ftmp);  // read gcfsf
+	gcfsf=ftmp;
+	fscanf(prd,"%f\n",&ftmp);  // read gcstopthresh
+	gcstopthresh=ftmp;
+	fscanf(prd,"%f\n",&ftmp);  // read gcrthresh
+	gcrthresh=ftmp;
+	fscanf(prd,"%ld\n",&ltmp); // read gclotspertrade
+	gclotspertrade=ltmp;
+	fscanf(prd,"%ld\n",&ltmp); // read gcmaxlots
+	gcmaxlots=ltmp;
+	fscanf(prd,"%ld\n",&ltmp); // read gcmaxreentry
+	gcmaxreentry=ltmp;
+        fscanf(prd,"%f\n",&ftmp); // read puritythresh
+        puritythresh=ftmp;
+	fscanf(prd,"%ld\n",&ltmp); // read gcmapscale
+	gcmapscale=ltmp;
+	fscanf(prd,"%ld\n",&ltmp); // read virg
+	virg=ltmp;
+	fscanf(prd,"%ld\n",&ltmp); // read evoptdays
+	evoptdays=ltmp;
+	fscanf(prd,"%ld\n",&ltmp); // read tradertype
+	tradertype=ltmp;
+	fscanf(prd,"%f\n",&ftmp);  // read minstopthresh
+	minstopthresh=ftmp;
+	fscanf(prd,"%ld\n",&ltmp); // read nospreadflag
+	nospreadflag=ltmp;
+	fscanf(prd,"%ld\n",&ltmp);  // read trailing
+	trailing=ltmp;
+	fscanf(prd,"%d\n",&virg);
+	fscanf(prd,"%d\n",&evoptdays);
+	fscanf(prd,"%d\n",&gcmaxhold);
+	fscanf(prd,"%ld\n",&gcsmaxhold);
+	fscanf(prd,"%d\n",&gcmaxpass);
+	fscanf(prd,"%d\n",&startgen);
+	fscanf(prd,"%d\n",&startss);
+	fscanf(prd,"%d\n",&tradertype);
+	fscanf(prd,"%d\n",&maaapg);
+	fscanf(prd,"%d\n",&max20);
+	fscanf(prd,"%d\n",&max60);
+	fscanf(prd,"%d\n",&max120);
+	fscanf(prd,"%d\n",&max250);
+	fscanf(prd,"%f\n",&ipc);
+	fscanf(prd,"%f\n",&matpc);
+	fscanf(prd,"%f\n",&opc);
+	fscanf(prd,"%d\n",&seed);
+	fscanf(prd,"%f\n",&minstopthresh);
+	fscanf(prd,"%d\n",&trailing);
+	fscanf(prd,"%d\n",&nospreadflag);
+	for(ss=0;ss<MAXPOPULATION;ss++)
+        {
+		  fscanf(prd,"%f ",&ftmp);
+		  fitness[ss]=ftmp;
+        for(genenum=0;genenum<MAXGENES;genenum++)
+            {
+				fscanf(prd,"%ld ",&ltmp);
+				parent[ss][genenum]=ltmp;
+				}
+		  fscanf(prd,"\n");
+		  }
+	fclose(prd);
+	return(1);
+	}
+
+
+write_pop()
+	{
+	char string[30];
+	int genenum=0;
+	int x,y;
+	long temp;
+	float tmp;
+	long ltmp;
+	clrscr();
+	system("dir *.pop");
+	printf("\n\t\t\tEnter population filename: ");
+	gets(string);
+	prd=fopen(string,"w");
+	if(prd == NULL)
+		{
+		printf("Can't open %s\n",string);
+		delay(2000);
+		return(1);
+		}
+	fprintf(prd,"%s\n",istream1);
+	fprintf(prd,"%s\n",istream2);
+	fprintf(prd,"%s\n",istream3);
+	fprintf(prd,"%s\n",istream4);
+	fprintf(prd,"%s\n",istream5);
+	fprintf(prd,"%s\n",istream6);
+	fprintf(prd,"%s\n",istream7);
+	fprintf(prd,"%s\n",istream8);
+	fprintf(prd,"%s\n",istream9);
+	fprintf(prd,"%ld\n",ocount);
+	fprintf(prd,"%d\n",targtype);
+	fprintf(prd,"%f\n",bsad);
+	fprintf(prd,"%f\n",bestalltime);
+	fprintf(prd,"%ld\n",gcmaxhold);
+	fprintf(prd,"%ld\n",gcsmaxhold);
+	fprintf(prd,"%ld\n",gcmaxpass);
+	fprintf(prd,"%f\n",gcfsf);
+	fprintf(prd,"%f\n",gcstopthresh);
+	fprintf(prd,"%f\n",gcrthresh);
+	fprintf(prd,"%ld\n",gclotspertrade);
+	fprintf(prd,"%ld\n",gcmaxlots);
+	fprintf(prd,"%ld\n",gcmaxreentry);
+        fprintf(prd,"%f\n",puritythresh);
+	fprintf(prd,"%ld\n",gcmapscale);
+	fprintf(prd,"%ld\n",virg);
+	fprintf(prd,"%ld\n",evoptdays);
+	fprintf(prd,"%ld\n",tradertype);
+	fprintf(prd,"%f\n",minstopthresh);
+	fprintf(prd,"%ld\n",nospreadflag);
+	fprintf(prd,"%ld\n",trailing);
+	fprintf(prd,"%d\n",virg);
+	fprintf(prd,"%d\n",evoptdays);
+	fprintf(prd,"%d\n",gcmaxhold);
+	fprintf(prd,"%ld\n",gcsmaxhold);
+	fprintf(prd,"%d\n",gcmaxpass);
+	fprintf(prd,"%d\n",startgen);
+	fprintf(prd,"%d\n",startss);
+	fprintf(prd,"%d\n",tradertype);
+	fprintf(prd,"%d\n",maaapg);
+	fprintf(prd,"%d\n",max20);
+	fprintf(prd,"%d\n",max60);
+	fprintf(prd,"%d\n",max120);
+	fprintf(prd,"%d\n",max250);
+	fprintf(prd,"%f\n",ipc);
+	fprintf(prd,"%f\n",matpc);
+	fprintf(prd,"%f\n",opc);
+	fprintf(prd,"%d\n",seed);
+	fprintf(prd,"%f\n",minstopthresh);
+	fprintf(prd,"%d\n",trailing);
+	fprintf(prd,"%d\n",nospreadflag);
+	for(ss=0;ss<MAXPOPULATION;ss++)
+		  {
+		  fprintf(prd,"%f ",fitness[ss]);
+		  for(genenum=0;genenum<MAXGENES;genenum++)
+				{
+				fprintf(prd,"%ld ",parent[ss][genenum]);
+				}
+		  fprintf(prd,"\n");
+		  }
+	fclose(prd);
+	clrscr();
+	return(1);
+	}
+
+
+write_batchpop()
+	{
+	char string[40];
+	int genenum=0;
+	int x,y;
+	long temp;
+	float tmp;
+	long ltmp;
+	clrscr();
+	itoa(mapnamecount,string,10);
+	strcat(string,".pop");
+	prd=fopen(string,"w");
+	if(prd == NULL)
+		{
+		printf("Can't open %s\n",string);
+		delay(2000);
+		return(1);
+		}
+	fprintf(prd,"%s\n",istream1);
+	fprintf(prd,"%s\n",istream2);
+	fprintf(prd,"%s\n",istream3);
+	fprintf(prd,"%s\n",istream4);
+	fprintf(prd,"%s\n",istream5);
+	fprintf(prd,"%s\n",istream6);
+	fprintf(prd,"%s\n",istream7);
+	fprintf(prd,"%s\n",istream8);
+	fprintf(prd,"%s\n",istream9);
+	fprintf(prd,"%ld\n",ocount);
+	fprintf(prd,"%d\n",targtype);
+	fprintf(prd,"%f\n",bsad);
+	fprintf(prd,"%f\n",bestalltime);
+	fprintf(prd,"%ld\n",gcmaxhold);
+	fprintf(prd,"%ld\n",gcsmaxhold);
+	fprintf(prd,"%ld\n",gcmaxpass);
+	fprintf(prd,"%f\n",gcfsf);
+	fprintf(prd,"%f\n",gcstopthresh);
+	fprintf(prd,"%f\n",gcrthresh);
+	fprintf(prd,"%ld\n",gclotspertrade);
+	fprintf(prd,"%ld\n",gcmaxlots);
+	fprintf(prd,"%ld\n",gcmaxreentry);
+        fprintf(prd,"%f\n",puritythresh);
+	fprintf(prd,"%ld\n",gcmapscale);
+	fprintf(prd,"%ld\n",virg);
+	fprintf(prd,"%ld\n",evoptdays);
+	fprintf(prd,"%ld\n",tradertype);
+	fprintf(prd,"%f\n",minstopthresh);
+	fprintf(prd,"%ld\n",nospreadflag);
+	fprintf(prd,"%ld\n",trailing);
+	fprintf(prd,"%d\n",virg);
+	fprintf(prd,"%d\n",evoptdays);
+	fprintf(prd,"%d\n",gcmaxhold);
+	fprintf(prd,"%ld\n",gcsmaxhold);
+	fprintf(prd,"%d\n",gcmaxpass);
+	fprintf(prd,"%d\n",startgen);
+	fprintf(prd,"%d\n",startss);
+	fprintf(prd,"%d\n",tradertype);
+	fprintf(prd,"%d\n",maaapg);
+	fprintf(prd,"%d\n",max20);
+	fprintf(prd,"%d\n",max60);
+	fprintf(prd,"%d\n",max120);
+	fprintf(prd,"%d\n",max250);
+	fprintf(prd,"%f\n",ipc);
+	fprintf(prd,"%f\n",matpc);
+	fprintf(prd,"%f\n",opc);
+	fprintf(prd,"%d\n",seed);
+	fprintf(prd,"%f\n",minstopthresh);
+	fprintf(prd,"%d\n",trailing);
+	fprintf(prd,"%d\n",nospreadflag);
+	for(ss=0;ss<MAXPOPULATION;ss++)
+		  {
+		  fprintf(prd,"%f ",fitness[ss]);
+		  for(genenum=0;genenum<MAXGENES;genenum++)
+				{
+				fprintf(prd,"%ld ",parent[ss][genenum]);
+				}
+		  fprintf(prd,"\n");
+		  }
+	fclose(prd);
+	clrscr();
+	return(1);
+	}
+
+
+
+
+
+
+
+
+read_map()
+	{
+	int x,y,ref,oldmode;
+	char string[40];
+	float tmp;
+	float tmpcount;
+	long ltmp;
+	float count=0.0;
+	float mark=.00001;
+	float mark2=.00003;
+	float bosmm=.00002;
+          fn[0]=22.0;
+          fn[1]=21.0;
+          fn[2]=20.0;
+          fn[3]=19.0;
+          fn[4]=18.0;
+          fn[5]=17.0;
+          fn[6]=16.0;
+          fn[7]=15.0;
+          fn[8]=14.0;
+          fn[9]=13.0;
+          fn[10]=12.0;
+          fn[11]=11.0;
+          fn[12]=10.0;
+          fn[13]=9.0;
+          fn[14]=8.0;
+          fn[15]=7.0;
+          fn[16]=6.0;
+          fn[17]=5.0;
+          fn[18]=4.0;
+          fn[19]=3.0;
+          fn[20]=2.0;
+          fn[21]=1.0;
+
+        init_map();
+	if(manualmode)
+		{
+          clrscr();
+		system("dir *.map");
+		printf("\n\t\t\tEnter map filename: ");
+		gets(string);
+		strcpy(imap,string);
+		}
+	prd=fopen(imap,"r");
+	if(prd == NULL)
+		{
+		printf("Can't open %s\n",string);
+		delay(2000);
+		return(1);
+		}
+	ss=0;
+	hidetoggle=1; // make visible
+	fscanf(prd,"%s\n",&string);
+	fscanf(prd,"%s\n",&istream1);
+	fscanf(prd,"%s\n",&istream2);
+	fscanf(prd,"%s\n",&istream3);
+	fscanf(prd,"%s\n",&istream4);
+	fscanf(prd,"%s\n",&istream5);
+	fscanf(prd,"%s\n",&istream6);
+	fscanf(prd,"%s\n",&istream7);
+	fscanf(prd,"%s\n",&istream8);
+	fscanf(prd,"%s\n",&istream9);
+        fscanf(prd,"%s\n",&istream21);
+        fscanf(prd,"%s\n",&istream22);
+        fscanf(prd,"%s\n",&istream23);
+        fscanf(prd,"%s\n",&istream24);
+        fscanf(prd,"%s\n",&istream25);
+        fscanf(prd,"%s\n",&istream26);
+        fscanf(prd,"%s\n",&istream27);
+        fscanf(prd,"%s\n",&istream28);
+        fscanf(prd,"%s\n",&istream29);
+        fscanf(prd,"%s\n",&istream30);
+        fscanf(prd,"%s\n",&istream31);
+        fscanf(prd,"%s\n",&istream32);
+        fscanf(prd,"%s\n",&istream33);
+        fscanf(prd,"%s\n",&istream34);
+        fscanf(prd,"%s\n",&istream35);
+        fscanf(prd,"%s\n",&istream36);
+        fscanf(prd,"%s\n",&istream37);
+        fscanf(prd,"%s\n",&istream38);
+        fscanf(prd,"%s\n",&istream39);
+        fscanf(prd,"%s\n",&istream40);
+        fscanf(prd,"%s\n",&istream41);
+        fscanf(prd,"%s\n",&istream42);
+        fscanf(prd,"%s\n",&istream43);
+        fscanf(prd,"%s\n",&istream44);
+
+        fscanf(prd,"%s\n",&istream45);
+        fscanf(prd,"%s\n",&istream46);
+        fscanf(prd,"%s\n",&istream47);
+        fscanf(prd,"%s\n",&istream48);
+        fscanf(prd,"%s\n",&istream49);
+        fscanf(prd,"%s\n",&istream50);
+        fscanf(prd,"%s\n",&istream51);
+        fscanf(prd,"%s\n",&istream52);
+        fscanf(prd,"%s\n",&istream53);
+        fscanf(prd,"%s\n",&istream54);
+        fscanf(prd,"%s\n",&istream55);
+        fscanf(prd,"%s\n",&istream56);
+        fscanf(prd,"%s\n",&istream57);
+        fscanf(prd,"%s\n",&istream58);
+        fscanf(prd,"%s\n",&istream59);
+        fscanf(prd,"%s\n",&istream60);
+
+        fscanf(prd,"%s\n",&istream61);
+        fscanf(prd,"%s\n",&istream62);
+        fscanf(prd,"%s\n",&istream63);
+        fscanf(prd,"%s\n",&istream64);
+        fscanf(prd,"%s\n",&istream65);
+        fscanf(prd,"%s\n",&istream66);
+        fscanf(prd,"%s\n",&istream67);
+        fscanf(prd,"%s\n",&istream68);
+        fscanf(prd,"%s\n",&istream69);
+        fscanf(prd,"%s\n",&istream70);
+        fscanf(prd,"%s\n",&istream71);
+        fscanf(prd,"%s\n",&istream72);
+        fscanf(prd,"%s\n",&istream73);
+        fscanf(prd,"%s\n",&istream74);
+        fscanf(prd,"%s\n",&istream75);
+        fscanf(prd,"%s\n",&istream76);
+        fscanf(prd,"%s\n",&istream77);
+        fscanf(prd,"%s\n",&istream78);
+        fscanf(prd,"%s\n",&istream79);
+        fscanf(prd,"%s\n",&istream80);
+        fscanf(prd,"%s\n",&istream81);
+        fscanf(prd,"%s\n",&istream82);
+        fscanf(prd,"%s\n",&istream83);
+        fscanf(prd,"%s\n",&istream84);
+        fscanf(prd,"%s\n",&istream85);
+        fscanf(prd,"%s\n",&istream86);
+        fscanf(prd,"%s\n",&istream87);
+        fscanf(prd,"%s\n",&istream88);
+        fscanf(prd,"%s\n",&istream89);
+        fscanf(prd,"%s\n",&istream90);
+        fscanf(prd,"%s\n",&istream91);
+        fscanf(prd,"%s\n",&istream92);
+        fscanf(prd,"%s\n",&istream93);
+        fscanf(prd,"%s\n",&istream94);
+        fscanf(prd,"%s\n",&istream95);
+        fscanf(prd,"%s\n",&istream96);
+        fscanf(prd,"%s\n",&istream97);
+        fscanf(prd,"%s\n",&istream98);
+        fscanf(prd,"%s\n",&istream99);
+        fscanf(prd,"%s\n",&istream100);
+        fscanf(prd,"%s\n",&istream101);
+        fscanf(prd,"%s\n",&istream102);
+        fscanf(prd,"%s\n",&istream103);
+        fscanf(prd,"%s\n",&istream104);
+        fscanf(prd,"%s\n",&istream105);
+        fscanf(prd,"%s\n",&istream106);
+        fscanf(prd,"%s\n",&istream107);
+        fscanf(prd,"%s\n",&istream108);
+
+
+
+
+
+
+
+
+
+        fscanf(prd,"%d\n",&ttp);
+        fscanf(prd,"%d\n",&twtp);
+        fscanf(prd,"%d\n",&tltp);
+
+	fscanf(prd,"%d\n",&hide);
+	fscanf(prd,"%f\n",&scatterscale);
+	fscanf(prd,"%f\n",&rss);
+	fscanf(prd,"%d\n",&learn);
+	fscanf(prd,"%d\n",&targtype);
+	fscanf(prd,"%f\n",&bsad);
+	fscanf(prd,"%f\n",&bestalltime);
+	fscanf(prd,"%f\n",&mltq);
+	fscanf(prd,"%d\n",&fittype);
+	fscanf(prd,"%f\n",&mutrate);
+	fscanf(prd,"%f\n",&maxweights);
+	fscanf(prd,"%d\n",&ft1);
+	fscanf(prd,"%d\n",&ft2);
+	fscanf(prd,"%d\n",&ft3);
+	fscanf(prd,"%d\n",&ft4);
+	fscanf(prd,"%d\n",&f2);
+	fscanf(prd,"%d\n",&f3);
+	fscanf(prd,"%d\n",&f4);
+	fscanf(prd,"%d\n",&flook);
+	fscanf(prd,"%d\n",&virg);
+	fscanf(prd,"%d\n",&evoptdays);
+	fscanf(prd,"%d\n",&tracelength);
+	fscanf(prd,"%f\n",&lrate);
+	fscanf(prd,"%d\n",&tracelength2);
+	fscanf(prd,"%f\n",&lrate2);
+	fscanf(prd,"%d\n",&tracelength3);
+	fscanf(prd,"%f\n",&lrate3);
+	fscanf(prd,"%d\n",&tracelength4);
+	fscanf(prd,"%f\n",&lrate4);
+	fscanf(prd,"%d\n",&maxhold);
+	fscanf(prd,"%d\n",&smaxhold);
+	fscanf(prd,"%d\n",&gcmaxhold);
+	fscanf(prd,"%ld\n",&gcsmaxhold);
+	fscanf(prd,"%d\n",&maxlots);
+	fscanf(prd,"%f\n",&longthresh);
+	fscanf(prd,"%f\n",&shortthresh);
+	fscanf(prd,"%d\n",&maxpass);
+	fscanf(prd,"%f\n",&fsf);
+	fscanf(prd,"%f\n",&stopthresh);
+	fscanf(prd,"%f\n",&rthresh);
+	fscanf(prd,"%d\n",&lotspertrade);
+	fscanf(prd,"%d\n",&maxlots);
+	fscanf(prd,"%d\n",&maxreentry);
+	fscanf(prd,"%d\n",&gcmaxpass);
+	fscanf(prd,"%f\n",&gcfsf);
+	fscanf(prd,"%f\n",&gcstopthresh);
+	fscanf(prd,"%f\n",&gcrthresh);
+	fscanf(prd,"%d\n",&gclotspertrade);
+	fscanf(prd,"%d\n",&gcmaxlots);
+	fscanf(prd,"%d\n",&gcmaxreentry);
+        fscanf(prd,"%f\n",&puritythresh);
+	fscanf(prd,"%d\n",&gcmapscale);
+	fscanf(prd,"%d\n",&gcmaxsamples);
+	fscanf(prd,"%d\n",&gcmaxhist);
+	fscanf(prd,"%d\n",&startgen);
+	fscanf(prd,"%d\n",&startss);
+	fscanf(prd,"%d\n",&tradertype);
+	fscanf(prd,"%d\n",&maaapg);
+	fscanf(prd,"%d\n",&max20);
+	fscanf(prd,"%d\n",&max60);
+	fscanf(prd,"%d\n",&max120);
+	fscanf(prd,"%d\n",&max250);
+	fscanf(prd,"%f\n",&ipc);
+	fscanf(prd,"%f\n",&matpc);
+	fscanf(prd,"%f\n",&opc);
+	fscanf(prd,"%d\n",&seed);
+	fscanf(prd,"%f\n",&minstopthresh);
+	fscanf(prd,"%d\n",&trailing);
+	fscanf(prd,"%d\n",&nospreadflag);
+	fscanf(prd,"%f\n",&oosfitness[ss]);
+	for(x=0;x<MAXDIST*8;x++)
+		{
+		fscanf(prd,"%d\n",&mapscale[x]);
+                fscanf(prd,"%d\n",&dayweight[x]);
+		}
+	count=0.0;
+	for(x=0;x<XSIZE;x++)
+		{
+		for(y=0;y<YSIZE;y++)
+			{
+			if(count == 0.0)
+				{
+				fscanf(prd,"%f\n",&tmp);
+				if(tmp == mark)  // found zero's marker
+					{
+					fscanf(prd,"%f\n",&tmpcount); // read in count
+					count=tmpcount-1;
+					map[x][y]=0.0;
+					continue;
+					}
+				if(tmp != mark)
+					{
+					map[x][y]=tmp;
+                         continue;
+					}
+				}
+			if(count > 0.0)
+				{
+				map[x][y]=0.0;
+				count=count-1.0;
+				}
+			}
+		}
+	for(x=0;x<1000;x++)
+		{
+		fscanf(prd,"%f\n",&tmp);
+		if(tmp == bosmm)
+			break;
+		}
+	count=0.0;
+	for(x=0;x<XSIZE;x++)
+		{
+		for(y=0;y<YSIZE;y++)
+			{
+			if(count == 0.0)
+				{
+				fscanf(prd,"%f\n",&tmp);
+				if(tmp == mark)  // found zero's marker
+					{
+					fscanf(prd,"%f\n",&tmpcount); // read count
+					count=tmpcount-1;
+					map2[x][y]=0.0;
+                         continue;
+					}
+				if(tmp != mark)
+					{
+					map2[x][y]=tmp;  // legit value
+					continue;
+					}
+				}
+			if(count > 0.0)
+				{
+				map2[x][y]=0.0;
+				count=count-1.0;
+				}
+			}
+		}
+	for(x=0;x<1000;x++) // get past 0's to resync
+		{
+		fscanf(prd,"%f\n",&tmp);
+		if(tmp == mark2)
+			{
+			break;
+               }
+		}
+	fscanf(prd,"%d\n",&ocount);
+	for(x=1;x<ocount;x++)
+		{
+		fscanf(prd,"%f\n",&tmp);
+		vf[x]=tmp;
+		}	
+     for(x=1;x<ocount;x++)
+		{
+		fscanf(prd,"%f\n",&tmp);
+          oosf[x]=tmp;
+		}	
+	fclose(prd);
+	oldmode=manualmode;
+	manualmode=0;
+	rd_prices();
+	rd_coorprices1();
+	rd_coorprices2();
+	rd_coorprices3();
+	rd_coorprices4();
+	rd_coorprices5();
+	rd_coorprices6();
+	rd_coorprices7();
+	rd_coorprices8();
+        rd_coorprices9();
+        rd_coorprices10();
+        rd_coorprices11();
+        rd_coorprices12();
+        rd_coorprices13();
+        rd_coorprices14();
+        rd_coorprices15();
+        rd_coorprices16();
+        rd_coorprices17();
+        rd_coorprices18();
+        rd_coorprices19();
+        rd_coorprices20();
+        rd_coorprices21();
+        rd_coorprices22();
+        rd_coorprices23();
+        rd_coorprices24();
+        rd_coorprices25();
+        rd_coorprices26();
+        rd_coorprices27();
+        rd_coorprices28();
+        rd_coorprices29();
+        rd_coorprices30();
+        rd_coorprices31();
+        rd_coorprices32();
+        rd_coorprices33();
+        rd_coorprices34();
+        rd_coorprices35();
+        rd_coorprices36();
+        rd_coorprices37();
+        rd_coorprices38();
+        rd_coorprices39();
+        rd_coorprices40();
+        rd_coorprices41();
+        rd_coorprices42();
+        rd_coorprices43();
+        rd_coorprices44();
+        rd_coorprices45();
+        rd_coorprices46();
+        rd_coorprices47();
+        rd_coorprices48();
+        rd_coorprices49();
+        rd_coorprices50();
+        rd_coorprices51();
+        rd_coorprices52();
+        rd_coorprices53();
+        rd_coorprices54();
+        rd_coorprices55();
+        rd_coorprices56();
+        rd_coorprices57();
+        rd_coorprices58();
+        rd_coorprices59();
+        rd_coorprices60();
+        rd_coorprices61();
+        rd_coorprices62();
+        rd_coorprices63();
+        rd_coorprices64();
+        rd_coorprices65();
+        rd_coorprices66();
+        rd_coorprices67();
+        rd_coorprices68();
+        rd_coorprices69();
+        rd_coorprices70();
+        rd_coorprices71();
+        rd_coorprices72();
+        rd_coorprices73();
+        rd_coorprices74();
+        rd_coorprices75();
+        rd_coorprices76();
+        rd_coorprices77();
+        rd_coorprices78();
+        rd_coorprices79();
+        rd_coorprices80();
+        rd_coorprices81();
+        rd_coorprices82();
+        rd_coorprices83();
+        rd_coorprices84();
+        rd_coorprices85();
+        rd_coorprices86();
+        rd_coorprices87();
+        rd_coorprices88();
+        rd_coorprices89();
+        rd_coorprices90();
+        rd_coorprices91();
+        rd_coorprices92();
+        rd_coorprices93();
+        rd_coorprices94();
+        rd_coorprices95();
+        rd_coorprices96();
+
+
+
+	manualmode=oldmode;
+	for(ref=250;ref<=nod;ref++)
+	  c_perfn(ref);
+	normalize();
+	return(1);
+	}
+
+
+
+
+
+
+
+
+write_map()
+	{
+	int x,y;
+	char string[30];
+	float tmp;
+	float zero=0.0;
+	long ltmp;
+	float count=0.0;
+	float mark=.00001;
+	float mark2=.00003;
+	float bosmm=.00002;
+	system("dir *.map");
+	printf("\n\t\t\tEnter .map filename: ");
+	gets(string);
+	prd=fopen(string,"w");
+        fprintf(prd,"%s\n","BAYES96X.exe");
+	fprintf(prd,"%s\n",istream1);
+	fprintf(prd,"%s\n",istream2);
+	fprintf(prd,"%s\n",istream3);
+	fprintf(prd,"%s\n",istream4);
+	fprintf(prd,"%s\n",istream5);
+	fprintf(prd,"%s\n",istream6);
+	fprintf(prd,"%s\n",istream7);
+	fprintf(prd,"%s\n",istream8);
+	fprintf(prd,"%s\n",istream9);
+        fprintf(prd,"%s\n",istream21);
+        fprintf(prd,"%s\n",istream22);
+        fprintf(prd,"%s\n",istream23);
+        fprintf(prd,"%s\n",istream24);
+        fprintf(prd,"%s\n",istream25);
+        fprintf(prd,"%s\n",istream26);
+        fprintf(prd,"%s\n",istream27);
+        fprintf(prd,"%s\n",istream28);
+
+        fprintf(prd,"%s\n",istream29);
+        fprintf(prd,"%s\n",istream30);
+        fprintf(prd,"%s\n",istream31);
+        fprintf(prd,"%s\n",istream32);
+        fprintf(prd,"%s\n",istream33);
+        fprintf(prd,"%s\n",istream34);
+        fprintf(prd,"%s\n",istream35);
+        fprintf(prd,"%s\n",istream36);
+        fprintf(prd,"%s\n",istream37);
+        fprintf(prd,"%s\n",istream38);
+        fprintf(prd,"%s\n",istream39);
+        fprintf(prd,"%s\n",istream40);
+        fprintf(prd,"%s\n",istream41);
+        fprintf(prd,"%s\n",istream42);
+        fprintf(prd,"%s\n",istream43);
+        fprintf(prd,"%s\n",istream44);
+
+
+        fprintf(prd,"%s\n",istream45);
+        fprintf(prd,"%s\n",istream46);
+        fprintf(prd,"%s\n",istream47);
+        fprintf(prd,"%s\n",istream48);
+        fprintf(prd,"%s\n",istream49);
+        fprintf(prd,"%s\n",istream50);
+        fprintf(prd,"%s\n",istream51);
+        fprintf(prd,"%s\n",istream52);
+        fprintf(prd,"%s\n",istream53);
+        fprintf(prd,"%s\n",istream54);
+        fprintf(prd,"%s\n",istream55);
+        fprintf(prd,"%s\n",istream56);
+        fprintf(prd,"%s\n",istream57);
+        fprintf(prd,"%s\n",istream58);
+        fprintf(prd,"%s\n",istream59);
+        fprintf(prd,"%s\n",istream60);
+
+
+        fprintf(prd,"%s\n",istream61);
+        fprintf(prd,"%s\n",istream62);
+        fprintf(prd,"%s\n",istream63);
+        fprintf(prd,"%s\n",istream64);
+        fprintf(prd,"%s\n",istream65);
+        fprintf(prd,"%s\n",istream66);
+        fprintf(prd,"%s\n",istream67);
+        fprintf(prd,"%s\n",istream68);
+        fprintf(prd,"%s\n",istream69);
+        fprintf(prd,"%s\n",istream70);
+        fprintf(prd,"%s\n",istream71);
+        fprintf(prd,"%s\n",istream72);
+        fprintf(prd,"%s\n",istream73);
+        fprintf(prd,"%s\n",istream74);
+        fprintf(prd,"%s\n",istream75);
+        fprintf(prd,"%s\n",istream76);
+        fprintf(prd,"%s\n",istream77);
+        fprintf(prd,"%s\n",istream78);
+        fprintf(prd,"%s\n",istream79);
+        fprintf(prd,"%s\n",istream80);
+        fprintf(prd,"%s\n",istream81);
+        fprintf(prd,"%s\n",istream82);
+        fprintf(prd,"%s\n",istream83);
+        fprintf(prd,"%s\n",istream84);
+        fprintf(prd,"%s\n",istream85);
+        fprintf(prd,"%s\n",istream86);
+        fprintf(prd,"%s\n",istream87);
+        fprintf(prd,"%s\n",istream88);
+        fprintf(prd,"%s\n",istream89);
+        fprintf(prd,"%s\n",istream90);
+        fprintf(prd,"%s\n",istream91);
+        fprintf(prd,"%s\n",istream92);
+        fprintf(prd,"%s\n",istream93);
+        fprintf(prd,"%s\n",istream94);
+        fprintf(prd,"%s\n",istream95);
+        fprintf(prd,"%s\n",istream96);
+        fprintf(prd,"%s\n",istream97);
+        fprintf(prd,"%s\n",istream98);
+        fprintf(prd,"%s\n",istream99);
+        fprintf(prd,"%s\n",istream100);
+        fprintf(prd,"%s\n",istream101);
+        fprintf(prd,"%s\n",istream102);
+        fprintf(prd,"%s\n",istream103);
+        fprintf(prd,"%s\n",istream104);
+        fprintf(prd,"%s\n",istream105);
+        fprintf(prd,"%s\n",istream106);
+        fprintf(prd,"%s\n",istream107);
+        fprintf(prd,"%s\n",istream108);
+
+
+
+        fprintf(prd,"%d\n",ttp);
+        fprintf(prd,"%d\n",twtp);
+        fprintf(prd,"%d\n",tltp);
+	fprintf(prd,"%d\n",hide);
+	fprintf(prd,"%f\n",scatterscale);
+	fprintf(prd,"%f\n",rss);
+	fprintf(prd,"%d\n",learn);
+	fprintf(prd,"%d\n",targtype);
+	fprintf(prd,"%f\n",bsad);
+	fprintf(prd,"%f\n",bestalltime);
+	fprintf(prd,"%f\n",mltq);
+	fprintf(prd,"%d\n",fittype);
+	fprintf(prd,"%f\n",mutrate);
+	fprintf(prd,"%f\n",maxweights);
+	fprintf(prd,"%d\n",ft1);
+	fprintf(prd,"%d\n",ft2);
+	fprintf(prd,"%d\n",ft3);
+	fprintf(prd,"%d\n",ft4);
+	fprintf(prd,"%d\n",f2);
+	fprintf(prd,"%d\n",f3);
+	fprintf(prd,"%d\n",f4);
+	fprintf(prd,"%d\n",flook);
+	fprintf(prd,"%d\n",virg);
+	fprintf(prd,"%d\n",evoptdays);
+	fprintf(prd,"%d\n",tracelength);
+	fprintf(prd,"%f\n",lrate);
+	fprintf(prd,"%d\n",tracelength2);
+	fprintf(prd,"%f\n",lrate2);
+	fprintf(prd,"%d\n",tracelength3);
+	fprintf(prd,"%f\n",lrate3);
+	fprintf(prd,"%d\n",tracelength4);
+	fprintf(prd,"%f\n",lrate4);
+	fprintf(prd,"%d\n",maxhold);
+	fprintf(prd,"%d\n",smaxhold);
+	fprintf(prd,"%d\n",gcmaxhold);
+	fprintf(prd,"%ld\n",gcsmaxhold);
+	fprintf(prd,"%d\n",maxlots);
+	fprintf(prd,"%f\n",longthresh);
+	fprintf(prd,"%f\n",shortthresh);
+	fprintf(prd,"%d\n",maxpass);
+	fprintf(prd,"%f\n",fsf);
+	fprintf(prd,"%f\n",stopthresh);
+	fprintf(prd,"%f\n",rthresh);
+	fprintf(prd,"%d\n",lotspertrade);
+	fprintf(prd,"%d\n",maxlots);
+	fprintf(prd,"%d\n",maxreentry);
+	fprintf(prd,"%d\n",gcmaxpass);
+	fprintf(prd,"%f\n",gcfsf);
+	fprintf(prd,"%f\n",gcstopthresh);
+	fprintf(prd,"%f\n",gcrthresh);
+	fprintf(prd,"%d\n",gclotspertrade);
+	fprintf(prd,"%d\n",gcmaxlots);
+	fprintf(prd,"%d\n",gcmaxreentry);
+        fprintf(prd,"%f\n",puritythresh);
+	fprintf(prd,"%d\n",gcmapscale);
+	fprintf(prd,"%d\n",gcmaxsamples);
+        fprintf(prd,"%d\n",gcmaxhist);
+	fprintf(prd,"%d\n",startgen);
+	fprintf(prd,"%d\n",startss);
+	fprintf(prd,"%d\n",tradertype);
+	fprintf(prd,"%d\n",maaapg);
+	fprintf(prd,"%d\n",max20);
+	fprintf(prd,"%d\n",max60);
+	fprintf(prd,"%d\n",max120);
+	fprintf(prd,"%d\n",max250);
+	fprintf(prd,"%f\n",ipc);
+	fprintf(prd,"%f\n",matpc);
+	fprintf(prd,"%f\n",opc);
+	fprintf(prd,"%d\n",seed);
+	fprintf(prd,"%f\n",minstopthresh);
+	fprintf(prd,"%d\n",trailing);
+	fprintf(prd,"%d\n",nospreadflag);
+	fprintf(prd,"%f\n",oosfitness[ss]);
+	for(x=0;x<MAXDIST*8;x++)
+		{
+		fprintf(prd,"%d\n",mapscale[x]);
+                fprintf(prd,"%d\n",dayweight[x]);
+		}
+	count=0.0;
+	for(x=0;x<XSIZE;x++)
+		{
+		for(y=0;y<YSIZE;y++)
+			{
+			if(x == XSIZE-1 && y == YSIZE-1)
+				{
+				fprintf(prd,"%f\n",mark);
+				fprintf(prd,"%f\n",count);
+				}
+			if(map[x][y] == 0.0)
+				{
+				count=count+1.0;
+				}
+			if(map[x][y] != 0.0)
+				{
+				if(count > 0.0)
+					{
+					fprintf(prd,"%f\n",mark);
+					fprintf(prd,"%f\n",count);
+					count=0.0;
+					}
+				if(count == 0.0)
+					{
+					tmp=map[x][y];
+					fprintf(prd,"%f\n",tmp);
+					}
+				}
+			}
+		}
+	for(x=0;x<100;x++)
+		fprintf(prd,"%f\n",zero);   // print pad
+	fprintf(prd,"%f\n",bosmm);     // print beginning of seconf map marker
+	count=0.0;
+	for(x=0;x<XSIZE;x++)
+		{
+		for(y=0;y<YSIZE;y++)
+			{
+			if(x == XSIZE-1 && y == YSIZE-1)
+				{
+				fprintf(prd,"%f\n",mark);
+				fprintf(prd,"%f\n",count);
+				}
+			if(map2[x][y] == 0.0)
+				{
+				count=count+1.0;
+				}
+			if(map2[x][y] != 0.0)
+				{
+				if(count > 0.0)
+					{
+					fprintf(prd,"%f\n",mark);
+					fprintf(prd,"%f\n",count);
+					count=0.0;
+					}
+				if(count == 0.0)
+					{
+					tmp=map2[x][y];
+					fprintf(prd,"%f\n",tmp);
+					}
+				}
+			}
+		}
+     for(x=0;x<100;x++)
+		fprintf(prd,"%f\n",zero);   // print pad
+	fprintf(prd,"%f\n",mark2); 
+	fprintf(prd,"%d\n",ocount);
+	for(x=1;x<ocount;x++)
+		{
+		tmp=vf[x];
+		fprintf(prd,"%f\n",tmp);
+		}	
+     for(x=1;x<ocount;x++)
+		{
+		tmp=oosf[x];
+		fprintf(prd,"%f\n",tmp);
+		}	
+	fclose(prd);
+	return(1);
+	}
+
+
+write_OLIVE()
+	{
+	int x,y;
+        char ans[40];
+	char string[60];
+	char string2[60];
+	float tmp;
+	float zero=0.0;
+	float mark=.00001;
+	float mark2=.00003;
+	float bosmm=.00002;
+	long ltmp;
+	int ians;
+	float count=0.0;
+	itoa(mapnamecount,string,10);
+	printf("Current default path = %s\n",mappath);
+	printf("Enter <2> to change it, or just return to use default path: ");
+	gets(ans);
+	ians=atoi(ans);
+	if(ians == 2)
+		{
+		printf("Enter new map path: ");
+		gets(mappath);
+		}
+	strcat(string,".map");
+	strcpy(string2,mappath);
+	strcat(string2,string);
+	prd=fopen(string2,"w");
+        if(prd == NULL)
+                {
+                printf("Can't open file/directory. Make sure subdir exists.\n");
+                delay(5000);
+                return(1);
+                }
+	printf("\n\n\tWriting map named: %s\n",string2);
+	delay(500);
+        fprintf(prd,"%s\n","BAYES96X.exe");
+	fprintf(prd,"%s\n",istream1);
+	fprintf(prd,"%s\n",istream2);
+	fprintf(prd,"%s\n",istream3);
+	fprintf(prd,"%s\n",istream4);
+	fprintf(prd,"%s\n",istream5);
+	fprintf(prd,"%s\n",istream6);
+	fprintf(prd,"%s\n",istream7);
+	fprintf(prd,"%s\n",istream8);
+	fprintf(prd,"%s\n",istream9);
+        fprintf(prd,"%s\n",istream21);
+        fprintf(prd,"%s\n",istream22);
+        fprintf(prd,"%s\n",istream23);
+        fprintf(prd,"%s\n",istream24);
+        fprintf(prd,"%s\n",istream25);
+        fprintf(prd,"%s\n",istream26);
+        fprintf(prd,"%s\n",istream27);
+        fprintf(prd,"%s\n",istream28);
+
+        fprintf(prd,"%s\n",istream29);
+        fprintf(prd,"%s\n",istream30);
+        fprintf(prd,"%s\n",istream31);
+        fprintf(prd,"%s\n",istream32);
+        fprintf(prd,"%s\n",istream33);
+        fprintf(prd,"%s\n",istream34);
+        fprintf(prd,"%s\n",istream35);
+        fprintf(prd,"%s\n",istream36);
+        fprintf(prd,"%s\n",istream37);
+        fprintf(prd,"%s\n",istream38);
+        fprintf(prd,"%s\n",istream39);
+        fprintf(prd,"%s\n",istream40);
+        fprintf(prd,"%s\n",istream41);
+        fprintf(prd,"%s\n",istream42);
+        fprintf(prd,"%s\n",istream43);
+        fprintf(prd,"%s\n",istream44);
+
+        fprintf(prd,"%s\n",istream45);
+        fprintf(prd,"%s\n",istream46);
+        fprintf(prd,"%s\n",istream47);
+        fprintf(prd,"%s\n",istream48);
+        fprintf(prd,"%s\n",istream49);
+        fprintf(prd,"%s\n",istream50);
+        fprintf(prd,"%s\n",istream51);
+        fprintf(prd,"%s\n",istream52);
+        fprintf(prd,"%s\n",istream53);
+        fprintf(prd,"%s\n",istream54);
+        fprintf(prd,"%s\n",istream55);
+        fprintf(prd,"%s\n",istream56);
+        fprintf(prd,"%s\n",istream57);
+        fprintf(prd,"%s\n",istream58);
+        fprintf(prd,"%s\n",istream59);
+        fprintf(prd,"%s\n",istream60);
+        fprintf(prd,"%s\n",istream61);
+        fprintf(prd,"%s\n",istream62);
+        fprintf(prd,"%s\n",istream63);
+        fprintf(prd,"%s\n",istream64);
+        fprintf(prd,"%s\n",istream65);
+        fprintf(prd,"%s\n",istream66);
+        fprintf(prd,"%s\n",istream67);
+        fprintf(prd,"%s\n",istream68);
+        fprintf(prd,"%s\n",istream69);
+        fprintf(prd,"%s\n",istream70);
+        fprintf(prd,"%s\n",istream71);
+        fprintf(prd,"%s\n",istream72);
+        fprintf(prd,"%s\n",istream73);
+        fprintf(prd,"%s\n",istream74);
+        fprintf(prd,"%s\n",istream75);
+        fprintf(prd,"%s\n",istream76);
+        fprintf(prd,"%s\n",istream77);
+        fprintf(prd,"%s\n",istream78);
+        fprintf(prd,"%s\n",istream79);
+        fprintf(prd,"%s\n",istream80);
+        fprintf(prd,"%s\n",istream81);
+        fprintf(prd,"%s\n",istream82);
+        fprintf(prd,"%s\n",istream83);
+        fprintf(prd,"%s\n",istream84);
+        fprintf(prd,"%s\n",istream85);
+        fprintf(prd,"%s\n",istream86);
+        fprintf(prd,"%s\n",istream87);
+        fprintf(prd,"%s\n",istream88);
+        fprintf(prd,"%s\n",istream89);
+        fprintf(prd,"%s\n",istream90);
+        fprintf(prd,"%s\n",istream91);
+        fprintf(prd,"%s\n",istream92);
+        fprintf(prd,"%s\n",istream93);
+        fprintf(prd,"%s\n",istream94);
+        fprintf(prd,"%s\n",istream95);
+        fprintf(prd,"%s\n",istream96);
+        fprintf(prd,"%s\n",istream97);
+        fprintf(prd,"%s\n",istream98);
+        fprintf(prd,"%s\n",istream99);
+        fprintf(prd,"%s\n",istream100);
+        fprintf(prd,"%s\n",istream101);
+        fprintf(prd,"%s\n",istream102);
+        fprintf(prd,"%s\n",istream103);
+        fprintf(prd,"%s\n",istream104);
+        fprintf(prd,"%s\n",istream105);
+        fprintf(prd,"%s\n",istream106);
+        fprintf(prd,"%s\n",istream107);
+        fprintf(prd,"%s\n",istream108);
+
+
+        fprintf(prd,"%d\n",ttp);
+        fprintf(prd,"%d\n",twtp);
+        fprintf(prd,"%d\n",tltp);
+	fprintf(prd,"%d\n",hide);
+	fprintf(prd,"%f\n",scatterscale);
+	fprintf(prd,"%f\n",rss);
+	fprintf(prd,"%d\n",learn);
+	fprintf(prd,"%d\n",targtype);
+	fprintf(prd,"%f\n",bsad);
+	fprintf(prd,"%f\n",bestalltime);
+	fprintf(prd,"%f\n",mltq);
+	fprintf(prd,"%d\n",fittype);
+	fprintf(prd,"%f\n",
+        mutrate);
+	fprintf(prd,"%f\n",maxweights);
+	fprintf(prd,"%d\n",ft1);
+	fprintf(prd,"%d\n",ft2);
+	fprintf(prd,"%d\n",ft3);
+	fprintf(prd,"%d\n",ft4);
+	fprintf(prd,"%d\n",f2);
+	fprintf(prd,"%d\n",f3);
+	fprintf(prd,"%d\n",f4);
+	fprintf(prd,"%d\n",flook);
+	fprintf(prd,"%d\n",virg);
+	fprintf(prd,"%d\n",evoptdays);
+	fprintf(prd,"%d\n",tracelength);
+	fprintf(prd,"%f\n",lrate);
+	fprintf(prd,"%d\n",tracelength2);
+	fprintf(prd,"%f\n",lrate2);
+	fprintf(prd,"%d\n",tracelength3);
+	fprintf(prd,"%f\n",lrate3);
+	fprintf(prd,"%d\n",tracelength4);
+	fprintf(prd,"%f\n",lrate4);
+	fprintf(prd,"%d\n",maxhold);
+	fprintf(prd,"%d\n",smaxhold);
+	fprintf(prd,"%d\n",gcmaxhold);
+	fprintf(prd,"%ld\n",gcsmaxhold);
+	fprintf(prd,"%d\n",maxlots);
+	fprintf(prd,"%f\n",longthresh);
+	fprintf(prd,"%f\n",shortthresh);
+	fprintf(prd,"%d\n",maxpass);
+	fprintf(prd,"%f\n",fsf);
+	fprintf(prd,"%f\n",stopthresh);
+	fprintf(prd,"%f\n",rthresh);
+	fprintf(prd,"%d\n",lotspertrade);
+	fprintf(prd,"%d\n",maxlots);
+	fprintf(prd,"%d\n",maxreentry);
+	fprintf(prd,"%d\n",gcmaxpass);
+	fprintf(prd,"%f\n",gcfsf);
+	fprintf(prd,"%f\n",gcstopthresh);
+	fprintf(prd,"%f\n",gcrthresh);
+	fprintf(prd,"%d\n",gclotspertrade);
+	fprintf(prd,"%d\n",gcmaxlots);
+	fprintf(prd,"%d\n",gcmaxreentry);
+        fprintf(prd,"%f\n",puritythresh);
+	fprintf(prd,"%d\n",gcmapscale);
+	fprintf(prd,"%d\n",gcmaxsamples);
+	fprintf(prd,"%d\n",gcmaxhist);
+	fprintf(prd,"%d\n",startgen);
+	fprintf(prd,"%d\n",startss);
+	fprintf(prd,"%d\n",tradertype);
+	fprintf(prd,"%d\n",maaapg);
+	fprintf(prd,"%d\n",max20);
+	fprintf(prd,"%d\n",max60);
+	fprintf(prd,"%d\n",max120);
+	fprintf(prd,"%d\n",max250);
+	fprintf(prd,"%f\n",ipc);
+	fprintf(prd,"%f\n",matpc);
+	fprintf(prd,"%f\n",opc);
+	fprintf(prd,"%d\n",seed);
+	fprintf(prd,"%f\n",minstopthresh);
+	fprintf(prd,"%d\n",trailing);
+	fprintf(prd,"%d\n",nospreadflag);
+	oosfitness[ss]=1.0;
+	fprintf(prd,"%f\n",oosfitness[ss]);
+	for(x=0;x<MAXDIST*8;x++)
+		{
+		fprintf(prd,"%d\n",mapscale[x]);
+                fprintf(prd,"%d\n",dayweight[x]);
+		}
+	count=0.0;
+	for(x=0;x<XSIZE;x++)
+		{
+		for(y=0;y<YSIZE;y++)
+			{
+			if(x == XSIZE-1 && y == YSIZE-1)
+				{
+				fprintf(prd,"%f\n",mark);
+				fprintf(prd,"%f\n",count);
+				}
+			if(map[x][y] == 0.0)
+				{
+				count=count+1.0;
+				}
+			if(map[x][y] != 0.0)
+				{
+				if(count > 0.0)
+					{
+					fprintf(prd,"%f\n",mark);
+					fprintf(prd,"%f\n",count);
+					count=0.0;
+					}
+				 if(count == 0.0)
+					{
+					tmp=map[x][y];
+					fprintf(prd,"%f\n",tmp);
+					}
+				}
+			}
+		}
+	for(x=0;x<100;x++)
+		fprintf(prd,"%f\n",zero);   // print pad
+	fprintf(prd,"%f\n",bosmm);     // print beginning of seconf map marker
+	count=0.0;
+	for(x=0;x<XSIZE;x++)
+		{
+		for(y=0;y<YSIZE;y++)
+			{
+			if(x == XSIZE-1 && y == YSIZE-1)
+				{
+				fprintf(prd,"%f\n",mark);
+				fprintf(prd,"%f\n",count);
+				}
+			if(map2[x][y] == 0.0)
+				{
+				count=count+1.0;
+				}
+			if(map2[x][y] != 0.0)
+				{
+				if(count > 0.0)
+					{
+					fprintf(prd,"%f\n",mark);
+					fprintf(prd,"%f\n",count);
+					count=0.0;
+					}
+				if(count == 0.0)
+					{
+					tmp=map2[x][y];
+					fprintf(prd,"%f\n",tmp);
+					}
+				}
+			}
+		}
+	for(x=0;x<100;x++)
+		fprintf(prd,"%f\n",zero);   // print pad
+	fprintf(prd,"%f\n",mark2); 
+	fprintf(prd,"%d\n",ocount);
+	for(x=1;x<ocount;x++)
+		{
+		tmp=vf[x];
+		fprintf(prd,"%f\n",tmp);
+		}	
+     for(x=1;x<ocount;x++)
+		{
+		tmp=oosf[x];
+		fprintf(prd,"%f\n",tmp);
+		}	
+	fclose(prd);
+	return(1);
+	}
+
+
+
+
+
+
+
+
+
+
+
+wrtpred()
+	{
+	long ref;
+	char string[30];
+	int pt;
+	if(manualmode)
+		{
+	//	printf("\n\t\tEnter .prd type (1 for raw, 2 for 50th percentile,\n");
+	//	printf("3 for upper percentile, 4 for lower percentile): ");
+	//	gets(string);
+		pt=1;
+		printf("\n\t\t\tEnter .prd filename: ");
+		gets(string);
+		strcpy(ostream,string);
+		}
+	printf("nod=%d\n",nod);
+//	delay(1000);
+	prd=fopen(ostream,"w");
+        for(ref=500;ref<=nod;ref++)
+		{
+		if(pt == 1 || manualmode == 0)
+			fprintf(prd,"%f\n",pred[ref]);
+		}
+	fclose(prd);
+	return(1);
+	}
+
+
+		 /******        THE END        *******/
