@@ -1,0 +1,100 @@
+
+\documentclass[12pt]{article}
+\usepackage{amsmath, amssymb}
+\usepackage{geometry}
+\geometry{margin=1in}
+\usepackage{setspace}
+\setstretch{1.2}
+
+\title{Evolved Probabilistic Structures Under Continuous Walk-Forward Pressure:\\
+A Drift-Resistant Alternative to Backpropagation in Non-Stationary Domains}
+\author{Christopher Wendling}
+\date{2025}
+
+\begin{document}
+\maketitle
+
+\begin{abstract}
+Machine learning systems deployed in non-stationary, noisy environments frequently suffer performance degradation due to drift, volatile correlations, or instability in their learned representations. Backpropagation-based neural networks, despite strong benchmark performance, inherit a structural weakness: their internal geometry reflects historical data rather than forward usefulness.
+
+This paper introduces an alternative representational method based on evolved probabilistic structures, maintained and selected under strict, continuous walk-forward out-of-sample pressure. We present a multi-year empirical study in next-day S\&P 500 directional forecasting---a domain characterized by extreme noise, instability, and low mutual information. The proposed method evolves two-dimensional histogram surfaces purely through accumulated prospective evidence, enforcing structure that survives contact with the future.
+
+Across more than 4{,}500 trading days (with over 500 guaranteed out-of-sample), these evolved structures demonstrate stable generalization, low drift, and persistent geometry. Because each representational candidate is evaluated solely on forward performance, the evolutionary process cancels out time-specific artifacts, retaining only time-invariant relationships that continue to matter.
+
+The results suggest that evolved structures offer a complementary path to generalization in domains where signal is sparse, unstable, or continuously shifting.
+\end{abstract}
+
+\section{Introduction}
+Machine learning has advanced rapidly through architectures capable of learning high-dimensional functions from large datasets. Yet in domains where noise dominates, data are sparse, or conditions change continually, successful generalization remains elusive. Backpropagation-based neural networks are optimized to reflect the statistical structure of historical examples, an approach that assumes some degree of stationarity in underlying relationships.
+
+Financial time series---and many real-world forecasting tasks---violate this assumption. Signals are weak, relationships shift without warning, and structural dependencies often disappear faster than models can be retrained. In such settings, models optimized retrospectively tend to chase the past rather than discover structure that remains valid in the future.
+
+This paper investigates a different approach: a representational system in which structure is never optimized against history, but instead emerges only through survival under continuous walk-forward testing.
+
+\section{Background and Motivation}
+Backpropagation offers exceptional representational power but depends on gradient-based adjustment of parameters to minimize historical error. This yields three limitations in non-stationary, low-SNR environments:
+
+\begin{enumerate}
+\item Retrospective bias: models implicitly assume yesterday's structure still applies today.
+\item Drift in internal geometry: learned features morph as environments change.
+\item Lack of prospective fitness pressure: the learning process never asks whether a structure will still work tomorrow.
+\end{enumerate}
+
+Evolutionary systems invert these assumptions. Fitness becomes proportional to future correctness, not past resemblance.
+
+\section{Method}
+
+\subsection{Probabilistic Structures}
+Representations take the form of two-dimensional histogram surfaces, where each cell accumulates evidence about directional outcomes conditioned on evolved trace partitions. Laplace-smoothed log-odds convert counts into calibrated probabilities.
+
+\subsection{Genotypes and Operators}
+Each surface is encoded as a genotype specifying bin boundaries, trace mappings, and mutation parameters. Operators include mutation, crossover, and selection, with competition determined solely by forward performance.
+
+\subsection{Continuous Walk-Forward Validation}
+At each step:
+\begin{enumerate}
+\item Convert genotype to phenotype.
+\item Generate next-day forecast.
+\item Observe outcome.
+\item Update evidence.
+\item Apply evolutionary operators based on forward performance.
+\item Repeat indefinitely.
+\end{enumerate}
+
+No retrospective fitting is used. Only structures that repeatedly prove forward usefulness persist.
+
+\section{Empirical Results}
+
+\subsection{Long-Horizon Generalization}
+Across 4{,}500+ trading days:
+\begin{itemize}
+\item over 500 days were guaranteed out-of-sample;
+\item many structures remained functional for 1--3 years after emergence;
+\item cumulative performance remained stable and resistant to drift.
+\end{itemize}
+
+\subsection{Stability Under Noise}
+Because each element is tested prospectively, ephemeral correlations decay while persistent geometry strengthens.
+
+\subsection{Drift Behavior and Structural Persistence}
+The evolutionary process effectively cancels out time. Only relationships that survive future conditions accumulate evidence. The system performs temporal renormalization: time itself becomes the filter.
+
+\section{Discussion}
+Backpropagation-based systems mirror historical data. Their geometry shifts as data shift, producing brittleness under drift.
+
+The method presented here imposes the opposite constraint: evolution selects structures that remain useful forward in time. This produces time-invariant geometry, calibration stability, and minimal structural drift. These properties make evolved structures suitable not only for forecasting but also as truth filters in larger AI systems.
+
+\section{Conclusion}
+This paper has presented a representational approach based on evolved probabilistic structures evaluated entirely under continuous walk-forward out-of-sample pressure. Over a multi-year horizon of S\&P 500 directional forecasts, these structures demonstrate stable generalization, low drift, and persistent geometry despite extreme noise and non-stationarity.
+
+Future work includes:
+\begin{enumerate}
+\item specialized hardware for evolutionary loops,
+\item extensions to relational and compositional domains,
+\item hybrid systems integrating evolved filters with neural models,
+\item theoretical bounds under PAC-Bayes or selective-risk frameworks.
+\end{enumerate}
+
+\noindent Continuous walk-forward evolutionary pressure provides a powerful organizing principle: retain only what remains useful in the future.
+
+\end{document}
