@@ -1,0 +1,98 @@
+WHY INTERPOLATION IS NOT GENERALIZATION
+Interpolation is the process of filling in the gaps between known examples.
+It creates smooth transitions within the boundaries of the training data.
+Interpolation is powerful, efficient, and often highly accurate in static
+environments. But interpolation cannot generalize because it does not
+discover structure. It assumes the future resembles the past and fails the
+moment the environment drifts.
+
+Interpolation extends memory.
+Generalization survives change.
+
+WHAT INTERPOLATION ACTUALLY DOES
+Interpolation works by:
+• connecting nearby examples,
+• smoothing over gaps,
+• inferring local regularities,
+• reinforcing dense regions of data.
+
+These behaviors approximate the training distribution, not the underlying
+causal structure. Interpolation does not explain why the pattern exists; it
+merely draws lines between points.
+
+Interpolation is continuity without understanding.
+
+THE STATIONARY REGIME FALLACY
+Interpolation works only when conditions remain fixed. In a stationary
+world:
+• meanings do not drift,
+• regimes do not shift,
+• drivers remain constant,
+• contexts stay aligned.
+
+But real systems—economies, languages, biological environments, physical
+processes—drift continuously. When drift occurs, interpolation predicts the
+past, not the present.
+
+Interpolation assumes a world that does not exist.
+
+WHY INTERPOLATION FAILS UNDER DRIFT
+When the environment moves outside the training range:
+• boundaries shift,
+• meanings update,
+• causal drivers change,
+• contexts reorganize,
+• relationships deform.
+
+Interpolation has no guidance in these regions. It extends curves into
+space where the supporting structure no longer applies. The result is
+hallucination.
+
+Interpolation turns drift into fiction.
+
+WHY LARGE MODELS INTERPOLATE MORE, NOT LESS
+As models scale:
+• interpolation becomes smoother,
+• memorized regions become denser,
+• correlations become more precise,
+• error becomes smaller.
+
+This makes the model appear more intelligent in stable conditions. But it
+strengthens dependence on the training distribution, making drift failure
+catastrophic. The model becomes a perfect map of a world that no longer
+exists.
+
+Scale perfects interpolation, not generalization.
+
+WHY GENERALIZATION REQUIRES INVARIANTS
+Generalization depends on discovering stable relationships—those that
+survive variation. A structure that persists across drift allows the system
+to infer correctly even in conditions it has never seen before. This is the
+opposite of interpolation. It is not about filling gaps in the data; it is
+about identifying what remains true when the data changes.
+
+Structure predicts the future.
+Interpolation predicts the past.
+
+EVOLUTION DISCOVERS STRUCTURE BY KILLING INSTABILITY
+Evolutionary systems expose representations to sequential drift. Patterns
+that fail are removed. Patterns that endure become the backbone of general
+intelligence. Interpolation plays no role in this process—because
+interpolation cannot distinguish unstable correlations from stable
+structure.
+
+Evolution replaces interpolation with truth.
+
+ABSTENTION AS A SAFETY MECHANISM
+Interpolation encourages guessing in regions with weak evidence. Abstention
+prevents this. When uncertainty is high, silence protects the system from
+injecting unstable patterns into its core structure.
+
+Abstention blocks interpolation from becoming hallucination.
+
+SUMMARY
+Interpolation is not generalization. Interpolation fills gaps within the
+training distribution. Generalization survives beyond it. Interpolation
+assumes stability. Generalization requires invariance. Machine learning
+models rely heavily on interpolation and collapse under drift. Evolution
+discovers the structure needed for genuine intelligence.
