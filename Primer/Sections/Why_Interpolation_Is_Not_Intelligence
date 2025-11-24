@@ -1,0 +1,93 @@
+WHY INTERPOLATION IS NOT INTELLIGENCE
+Most modern AI systems are interpolation engines. They learn patterns from
+the past and reproduce new outputs that resemble those patterns. This can
+look like intelligence because it produces fluent language, convincing
+reasoning, and accurate predictions within familiar conditions. But
+interpolation is not intelligence. It is the rearrangement of known
+structure, not the discovery of new structure. It carries no guarantee of
+stability, no resistance to drift, and no mechanism for determining which
+patterns will survive when the world changes.
+
+Interpolation recreates the past. Intelligence must survive the future.
+
+THE LIMITS OF INTERPOLATION
+Interpolation works only inside the convex hull of the training data. It
+can generate outputs that lie between known examples, but it cannot
+reliably extrapolate beyond them. When the environment moves outside the
+region covered by historical data, interpolation collapses. The system has
+no meaningful guide for what should be true under new conditions.
+
+This limitation is invisible in sample and catastrophic out of sample.
+
+THE ILLUSION OF COHERENCE
+Large models produce coherent, articulate outputs. This creates the
+impression that the system understands the underlying concepts. But the
+coherence is a result of pattern smoothing, not genuine comprehension.
+Interpolation engines stitch together fragments of learned structure to
+produce the most statistically likely continuation. This often looks like
+reasoning but is not grounded in stability.
+
+Fluency masks fragility.
+
+WHY INTERPOLATION FAILS UNDER DRIFT
+Drift moves the system outside the region in which interpolation is valid.
+When meanings shift, contexts evolve, or relationships change, the model
+attempts to interpolate using patterns that no longer apply. This produces
+hallucinations: confident answers built from outdated or irrelevant
+structure.
+
+Interpolation assumes the future will resemble the past. Drift punishes
+this assumption.
+
+INTERPOLATION VS STRUCTURE DISCOVERY
+Interpolation does not separate noise from structure. It records whatever
+correlations appear in the data, stable or unstable. It has no mechanism
+to discard patterns that fail under variation. As a result, learned models
+encode a mixture of truth and noise. During inference, the system cannot
+distinguish between them.
+
+Interpolation amplifies whatever it memorized. Evolution identifies what
+survives.
+
+THE ABSENCE OF SURVIVAL PRESSURE
+An interpolation engine is never forced to prove that its internal
+representations will remain correct when conditions change. Nothing in the
+training process exposes unstable patterns to drift. As a result, these
+patterns survive inside the model indefinitely. They sit dormant until the
+environment shifts, at which point they cause catastrophic errors.
+
+Without survival pressure, instability accumulates.
+
+WHY SCALE DOES NOT SOLVE THE PROBLEM
+Scaling increases the model’s ability to interpolate. It does not increase
+its ability to generalize. Larger models memorize more correlations,
+including more spurious patterns. They produce more convincing outputs,
+including more convincing hallucinations. Scaling makes interpolation
+smoother but does not give it the ability to evaluate stability.
+
+Interpolation becomes more powerful, not more intelligent.
+
+WHY ABSTENTION IS IMPOSSIBLE FOR INTERPOLATION ENGINES
+Interpolation engines cannot abstain because they always have a nearest
+neighbor or a learned continuation to offer. Even in regions of extreme
+uncertainty, the system will produce an output that resembles the training
+distribution. This guarantees hallucination when the environment drifts.
+
+Silence must be learned through survival pressure, not statistics.
+
+EVOLUTION AS THE DISCOVERY OF STABILITY
+Evolution exposes every pattern to variations the system has never seen.
+Unstable patterns collapse immediately. Stable patterns endure. This
+process reveals the invariant backbone of the environment. When reasoning
+and interpolation operate on this stable backbone, they become reliable.
+
+Interpolation rearranges structure. Evolution discovers it.
+
+SUMMARY
+Interpolation is not intelligence. It is a statistical mechanism that
+reproduces patterns within known boundaries. It cannot detect drift, cannot
+separate noise from structure, cannot abstain, and cannot evaluate whether
+a pattern will survive new conditions. Intelligence requires more than
+pattern matching. It requires stability. Evolution provides the survival
+pressure necessary to uncover the structures that endure. Interpolation
+alone can never achieve this.
