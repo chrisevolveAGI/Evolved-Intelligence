@@ -1,0 +1,86 @@
+PREDICTION UNDER DRIFT IS INTELLIGENCE
+Prediction is often treated as a measure of intelligence, but this is true
+only in environments that change. In a stationary world, prediction is
+easy. Even simple models can achieve high accuracy by memorizing the past,
+interpolating between examples, or compressing correlations that never
+move. This creates the illusion of intelligence without requiring any real
+understanding.
+
+But in a drifting or non stationary environment, prediction becomes the
+most demanding test of all. When the underlying relationships shift across
+time, context, scale, or any other axis of variation, only systems that
+have discovered the stable structures can continue to predict correctly.
+This is the boundary where prediction becomes indistinguishable from
+understanding. In drifting environments, prediction is intelligence.
+
+THE FALLACY OF STATIONARY PREDICTION
+Stationary environments reward memory, not insight. A system can perform
+extremely well simply by storing correlations that remain unchanged. No
+mechanism is required to distinguish structure from noise. No temporal or
+contextual tests challenge the model’s assumptions. As long as conditions
+remain fixed, even fragile models appear strong.
+
+Stationary prediction mimics intelligence without achieving it.
+
+WHY DRIFT CHANGES EVERYTHING
+Drift exposes the instability of learned correlations. When meanings
+change, regimes shift, or underlying conditions move, unstable patterns
+collapse instantly. A system that relied on these patterns reveals that it
+never understood the domain. It was fitting curves, not discovering
+structure.
+
+Drift forces the system to identify what is truly stable.
+
+PREDICTION AS A TEST OF INVARIANTS
+In drifting environments, prediction requires the system to locate the
+invariants the relationships that remain true even when everything else
+changes. These invariants may be weak in the short term, subtle, or easy
+to overlook, but they survive variation. Correct prediction under drift is
+evidence that the system has discovered these stable structures.
+
+Prediction becomes a test of endurance, not correlation.
+
+WHY INTERPOLATION FAILS UNDER DRIFT
+Interpolation relies on the assumption that the future lies between the
+examples seen in the past. Drift violates this assumption. When the target
+moves outside the region covered by the training data, interpolation
+produces confident but incorrect outputs. The model has no guidance
+because it never learned the true structure—only its appearance.
+
+Interpolation predicts the past. Intelligence predicts the future.
+
+EVOLUTION AS THE DISCOVERY MECHANISM
+Only evolutionary systems test each representation against drift. Patterns
+that fail under variation are removed. Patterns that survive become part
+of the stable backbone. This process transforms prediction into a measure
+of structural truth. When predictions remain accurate after the world has
+changed, the system has identified real invariants.
+
+Evolution turns prediction into understanding.
+
+THE ROLE OF ABSTENTION
+During periods of rapid drift, even stable structures may be temporarily
+obscured. A system that is forced to guess will hallucinate. A system that
+can abstain will wait for clarity. This protects the underlying
+representation from contamination and maintains predictive stability over
+time.
+
+Silence is a survival strategy when the world is shifting.
+
+WHY THIS DEFINES INTELLIGENCE
+In a drifting world, intelligence is the ability to make correct
+predictions when the training distribution no longer applies. This
+requires discovering what persists, rejecting what breaks, and grounding
+all inferences in structures that survive variation. Prediction becomes
+evidence of understanding only when the environment moves.
+
+Intelligence is prediction that survives drift.
+
+SUMMARY
+Prediction in stationary systems is not intelligence; it is interpolation.
+Prediction in drifting systems is intelligence, because it requires the
+discovery of stable structure. Drift exposes the difference between
+memorization and understanding. Evolution uncovers invariants that persist
+under variation. Abstention protects the model during uncertainty. When a
+system can predict correctly after the world has changed, it has achieved
+something that mirrors the core of intelligence itself.
