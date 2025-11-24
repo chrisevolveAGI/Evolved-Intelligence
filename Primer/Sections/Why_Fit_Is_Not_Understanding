@@ -1,0 +1,102 @@
+WHY FIT IS NOT UNDERSTANDING
+Modern machine learning is built on the idea of fit—how well a model
+matches historical data. Fit is treated as a proxy for intelligence, for
+insight, for understanding. But fit measures only how closely a system
+conforms to the past. It does not measure how well the system will perform
+when the world changes. Fit is backward-looking. Understanding is
+forward-looking.
+
+Fit reproduces correlations.
+Understanding reveals structure.
+
+WHAT FIT ACTUALLY MEASURES
+Fit measures error reduction within a closed environment. A model with
+excellent fit:
+• reproduces the training data,
+• interpolates smoothly between examples,
+• captures local correlations,
+• minimizes residuals.
+
+But none of these behaviors require understanding. They require only that
+the system mimic the surface regularities in the data. Fit can be perfect
+even when the model’s internal representation is fragile.
+
+Fit describes what was.
+Understanding explains what is.
+
+WHY FIT CANNOT HANDLE DRIFT
+Fit assumes the future resembles the past. Drift violates this assumption.
+When conditions move—economically, semantically, physically, or
+contextually—the patterns that produced high fit lose their predictive
+value. Suddenly:
+• high-correlation regions collapse,
+• signs flip,
+• magnitudes vanish,
+• relationships disappear.
+
+A model built on fit shatters when the environment evolves.
+
+Fit predicts yesterday.
+Understanding predicts tomorrow.
+
+WHY MORE FIT MAKES THE PROBLEM WORSE
+As a model improves fit, it absorbs more correlations, including unstable
+ones. This makes it more fragile, not less. More fit increases the density
+of temporary, regime-bound relationships inside the model. When drift
+arrives, these brittle correlations fail all at once.
+
+Better fit often means worse generalization.
+
+UNDERSTANDING REQUIRES STRUCTURE
+Understanding emerges only from discovering stable structure—
+relationships that survive variation. A model that understands the domain
+can make correct predictions even when the environment moves outside the
+training range. This requires identifying invariants, not correlations.
+
+Structure is the anchor that survives drift.
+
+WHY OPTIMIZATION CONFUSES FIT WITH UNDERSTANDING
+Optimization drives the system toward maximal fit, rewarding every pattern
+that reduces error, regardless of stability. The optimizer cannot
+distinguish:
+• noise from signal,
+• temporary alignment from structural truth,
+• correlation from causation.
+
+This confusion leads to overconfidence under drift and failure when the
+regime shifts.
+
+Optimization perfects mimicry, not understanding.
+
+THE ROLE OF DRIFT AS THE TRUE TEST
+Understanding is revealed only under drift. When conditions change:
+• unstable correlations collapse,
+• noise disappears,
+• structure endures.
+
+A system that continues to predict correctly under drift demonstrates it
+has discovered true structure. This is understanding.
+
+Drift separates mimicry from intelligence.
+
+WHY EVOLUTION CREATES UNDERSTANDING
+Evolution exposes patterns to sequential variation. Representations that
+fail are removed. Representations that endure accumulate. Over time, the
+system retains only stable structure. Fit alone cannot produce this
+filter. Evolution can.
+
+Evolution turns fit into understanding by killing instability.
+
+ABSTENTION PROTECTS UNDERSTANDING
+Under uncertainty, forced prediction contaminates the model. Abstention
+preserves structure by refusing to reinforce unstable correlations.
+Abstention is the firewall between understanding and noise.
+
+Silence maintains the integrity of truth.
+
+SUMMARY
+Fit is not understanding. Fit measures how well a model matches the past.
+Understanding measures how well it survives the future. Fit rewards
+correlations. Understanding requires structure. Machine learning optimizes
+fit and confuses it with intelligence. Evolution exposes instability and
+discovers the invariants that create real understanding.
