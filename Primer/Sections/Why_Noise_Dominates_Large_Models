@@ -1,0 +1,102 @@
+WHY NOISE DOMINATES LARGE MODELS
+As models grow, they absorb more data, more correlations, and more apparent
+patterns. But scale does not make these patterns more stable. It simply
+increases the amount of noise the system can memorize. Because noise is
+more abundant than structure in any real dataset, large models inevitably
+encode far more noise than truth. When the environment drifts, this noise
+collapses, producing overconfidence, hallucination, and structural failure.
+
+Scale increases capacity, not stability.
+Noise grows faster than truth.
+
+THE COMBINATORIAL EXPLOSION OF NOISE
+In any real-world domain:
+• stable structure is sparse,
+• unstable correlations are abundant,
+• regime-specific patterns dominate the data,
+• temporary alignments far outnumber invariants.
+
+As model capacity increases, the number of unstable correlations it can
+internalize expands combinatorially. The model becomes filled with patterns
+that will not survive drift.
+
+Large models memorize noise at scale.
+
+WHY BIGGER MODELS LOOK SMARTER—AT FIRST
+With more parameters, a model can:
+• reduce loss more effectively,
+• interpolate with higher fidelity,
+• mimic examples more closely,
+• fit complex surface-level correlations.
+
+This improves in-sample performance, giving the appearance of
+understanding. But this improvement is entirely dependent on the stability
+of the training window. Under drift, the advantage disappears.
+
+Scale amplifies mimicry, not understanding.
+
+DRIFT EXPOSES NOISE
+When the environment moves:
+• noise collapses instantly,
+• unstable correlations flip signs,
+• confidence remains high,
+• outputs become incoherent,
+• hallucination increases.
+
+The sheer volume of noise encoded in large models guarantees widespread
+failure under drift.
+
+The bigger the model, the bigger the collapse.
+
+WHY OPTIMIZATION CANNOT DISTINGUISH NOISE
+Loss-based training rewards every pattern that reduces error. It does not
+care whether the pattern:
+• is stable,
+• is fragile,
+• is causal,
+• will survive drift.
+
+Optimization strengthens noise as aggressively as it strengthens structure.
+This creates a dense internal geometry dominated by unstable correlations.
+
+Optimization perfects instability.
+
+MORE DATA MAKES IT WORSE
+Adding more data does not increase the fraction of stable
+relationships. It increases:
+• noise density,
+• regime artifacts,
+• short-lived correlations,
+• semantic drift residues,
+• measurement bias,
+• transient alignment patterns.
+
+Large datasets overwhelm the tiny portion of the signal that actually
+survives variation.
+
+More data reinforces noise at scale.
+
+EVOLUTION FILTERS NOISE BY EXPOSING IT TO DRIFT
+Evolutionary systems eliminate unstable patterns through survival tests.
+Every representation must function across sequential out-of-sample drift.
+Patterns that fail are removed. Patterns that endure are reinforced. Over
+time, the system accumulates only stable structure and sheds noise
+naturally.
+
+Evolution filters noise.
+Scaling memorizes it.
+
+ABSTENTION CONTAINS NOISE BEFORE IT SPREADS
+Forced prediction reinforces unstable correlations. Abstention prevents the
+model from learning from weak evidence. Silence stops noise from entering
+the structural core and preserves the integrity of the representation.
+
+Abstention prevents noise infection.
+
+SUMMARY
+Large models memorize more noise than truth because unstable correlations
+vastly outnumber stable structure. Optimization amplifies this noise,
+making models appear intelligent in stationary settings but fragile under
+drift. More data makes the problem worse, not better. Only evolutionary
+pressure, drift testing, and abstention can suppress noise and reveal the
+stable structures required for real intelligence.
