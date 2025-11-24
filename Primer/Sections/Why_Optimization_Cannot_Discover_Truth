@@ -1,0 +1,101 @@
+WHY OPTIMIZATION CANNOT DISCOVER TRUTH
+Optimization is one of the central tools of modern machine learning. It
+adjusts parameters to minimize error, improve fit, and capture patterns in
+the data. But optimization cannot discover truth. It can only discover
+what reduces error on the past. Optimization has no awareness of drift, no
+mechanism to test stability, and no ability to separate structure from
+noise. It rewards correlations that appear strong in the training window,
+whether or not they will survive.
+
+Optimization improves performance. Evolution discovers truth.
+
+THE LIMITS OF OPTIMIZATION
+Optimization works by adjusting internal parameters until the model fits
+the training data as well as possible. This is powerful in terms of
+capturing the surface structure of the environment. But fit is not
+stability. Many patterns that reduce error in the training set are fragile
+under variation. Some correlations exist only in a specific regime. Others
+are artifacts of noise. Optimization cannot detect these distinctions.
+
+Optimization sees error, not invariance.
+
+WHY OPTIMIZATION REINFORCES NOISE
+When a correlation reduces error, optimization strengthens it. This is
+true even if the correlation is temporary or spurious. The model becomes
+more confident in relationships that may collapse when the environment
+shifts. This phenomenon creates brittle systems that perform extremely well
+in sample but fail under drift.
+
+Optimization amplifies instability without realizing it.
+
+THE PROBLEM OF LOCAL MINIMA
+Optimization finds local minima that depend heavily on the specific
+landscape of the training data. A local minimum that appears optimal in
+one regime may be catastrophically unstable in another. Optimization has no
+mechanism to examine unseen conditions. Its judgments are bounded by the
+window it is given.
+
+Truth cannot be found in a closed world.
+
+WHY REGULARIZATION DOES NOT SOLVE THE PROBLEM
+Regularization techniques attempt to prevent overfitting by imposing
+constraints such as sparsity, smoothness, or weight penalties. But these
+constraints are arbitrary. They do not come from the structure of the
+environment. They cannot identify which patterns will survive variation.
+They only suppress complexity, not instability.
+
+Regularization reduces fragility without creating truth.
+
+OPTIMIZATION VS SURVIVAL PRESSURE
+Optimization rewards patterns that reduce error. Survival pressure rewards
+patterns that remain accurate when conditions change. These are different
+objectives. A pattern may be excellent for optimization but terrible for
+survival. Only evolutionary tests that expose patterns to drift can
+separate the stable from the unstable.
+
+Optimization fits. Evolution filters.
+
+WHY OPTIMIZATION CANNOT HANDLE DRIFT
+Optimization assumes that the relationships encoded in the training data
+are representative of the future. This assumption is false in any drifting
+environment. When the underlying dynamics change, optimized patterns break.
+The system has no mechanism to adapt because it has no memory of why the
+pattern worked. It only knows that it reduced error in the past.
+
+Optimization is backward looking. Intelligence must be forward looking.
+
+WHY SCALE MAKES OPTIMIZATION MORE FRAGILE
+As models grow larger, optimization finds more patterns and reinforces them
+more aggressively. This increases the density of the internal
+representation and amplifies fragility. Large models memorize more of the
+past but remain equally blind to the future. Scaling optimization deepens
+the hole without revealing the ladder.
+
+More optimization increases confidence, not stability.
+
+THE ROLE OF ABSTENTION
+In unstable or ambiguous regions, optimization encourages the model to
+guess. Every guess adjusts weights, even if the evidence is poor. This
+reinforces unstable structure and contaminates the model. Evolutionary
+systems abstain instead. They avoid committing to predictions when
+evidence is insufficient. Abstention protects the system from the
+side-effects of optimization.
+
+Silence is better than forced error correction.
+
+EVOLUTION AS THE DISCOVERY OF TRUTH
+Evolution tests representations against drift. Patterns that fail are
+eliminated. Patterns that survive are reinforced. Over time, this process
+uncovers invariants—the relationships that remain true across variation.
+Optimization cannot reveal these invariants because it does not test for
+stability. Evolution does.
+
+Truth emerges when unstable patterns die.
+
+SUMMARY
+Optimization improves fit but cannot discover truth. It reinforces
+correlations without testing their durability. It breaks under drift and
+becomes fragile as it scales. Regularization reduces complexity but does
+not reveal structure. Only evolution provides the survival pressure needed
+to distinguish stable patterns from unstable ones. Intelligence requires
+truth, and truth requires the ability to survive variation.
