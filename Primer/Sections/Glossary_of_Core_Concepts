@@ -1,0 +1,137 @@
+GLOSSARY OF CORE CONCEPTS
+This glossary defines the foundational concepts used throughout the AGI
+Primer. These definitions are precise, non standard, and specific to
+evolutionary intelligence (L7A, EGM). They anchor the vocabulary of
+truth, structure, generalization, drift, and the evolutionary process by
+which stable knowledge emerges.
+
+TRUTH
+Truth is whatever survives drift. It is not fact, fit, or correlation.
+Truth is stability across variation—across time, context, scale,
+temperature, meaning, regime, or any axis along which conditions can
+change. A relationship that remains valid under drift is true. A
+relationship that collapses when conditions move is not.
+
+Truth is revealed only through survival.
+
+STRUCTURE
+Structure is a stable, functional arrangement that maintains predictive
+power when conditions change. Structure is not merely shape, syntax, or
+pattern. Structure is whatever endures.
+
+Examples in software and algorithms include:
+• L7A histogram surfaces and bin differentials that survive sequential
+out of sample drift.
+• Evolved partitions or feature sets produced by eliminating unstable
+candidates.
+• Sparse causal flows in FSMs or regulatory models that continue to
+function under perturbation.
+• Frequency components that persist across moving windows.
+
+Examples in biology include:
+• The cortical sheet—its folded geometry survives evolutionary drift.
+• The spinal cord—robust routing architecture under variation.
+• Neural microcircuits—stable motifs conserved across species.
+• DNA repair loops—evolved structures that correct drift in replication.
+• Protein folds—shapes that maintain function under thermal variation.
+• Biological clocks—stable periodic structures across conditions.
+
+Examples in physics:
+• Orbital geometries that persist under perturbation.
+• Resonant modes that survive changes in boundary conditions.
+• Crystalline lattices—lowest energy stable arrangements.
+• Conservation laws—fundamental invariants.
+
+Examples in evolved intelligence:
+• Differential map surfaces (L7A).
+• Evolved bin geometries and topology.
+• Stable correlation manifolds across streams.
+• Abstention membranes—regions where the model refuses to act until
+stability returns.
+
+Structure is whatever does not break.
+
+GENERALIZATION
+Generalization is the ability to make correct predictions when the
+environment has drifted beyond the training distribution. It is not
+interpolation, not cross validation accuracy, not error minimization.
+Generalization requires the death of unstable patterns. Only structures
+that survive drift enable correct prediction outside the original regime.
+
+Interpolation predicts the past.
+Generalization predicts the future.
+
+NEGENTROPY
+Negentropy is the accumulated reduction of uncertainty achieved by
+discovering stable structure. In evolutionary intelligence, negentropy is
+not thermodynamic; it is informational. Negentropy increases when unstable
+patterns die and stable patterns endure.
+
+Examples in L7A:
+• Smoother surfaces as noise collapses.
+• Stable bin asymmetries across walk forward segments.
+• Reduced predictive entropy in mature regions of the map.
+• Persistence of structure across sequential OOS slices.
+
+Negentropy is structure accumulating over time.
+
+DRIFT
+Drift is variation along any axis: time, scale, temperature, meaning,
+geometry, semantics, context, regime. Drift is the adversary. Drift breaks
+unstable patterns instantly. Drift reveals which structures are real.
+
+INTELLIGENCE
+Intelligence is prediction that survives drift. It is the ability to
+identify invariants and act on them correctly when the world has changed.
+Intelligence emerges only from systems that eliminate unstable patterns
+and preserve stable ones.
+
+NOISE
+Noise is any pattern that fails under drift. Noise may appear strong in
+sample but collapses when conditions move. Noise is the opposite of
+structure.
+
+INVARIANTS
+Invariants are relationships that remain true under variation. They may be
+weak locally but persist globally. Invariants are the atomic units of
+truth.
+
+FIT VS SURVIVAL
+Fit is performance on the past. Survival is performance after conditions
+change. Fit rewards memorization. Survival rewards structure.
+
+OPTIMIZATION
+Optimization adjusts parameters to reduce error in sample. It does not
+test stability, cannot detect drift, and cannot eliminate unstable
+patterns. Optimization improves fit but cannot discover truth.
+
+EVOLUTIONARY PRESSURE
+Evolution applies survival tests across variation. Patterns that break are
+removed. Patterns that endure are strengthened. Evolution is the only
+mechanism that filters instability and reveals structure.
+
+ABSTENTION
+Abstention is the refusal to act when evidence is insufficient. Abstention
+prevents the system from reinforcing unstable patterns. Abstention
+protects structure during uncertainty.
+
+SURVIVAL OF REPRESENTATIONS
+A representation survives if it continues to produce correct predictions
+under drift. Survival, not complexity or strength, determines value.
+
+MAP SURFACE
+In L7A, the map surface is the evolved 2D histogram geometry encoding
+bin-level evidence. The surface becomes a repository of structure as
+unstable bins collapse and stable regions strengthen.
+
+ENTROPY GRADIENT
+A direction of increasing unpredictability or decreasing stability. The
+goal of evolution is to climb against this gradient by accumulating
+negentropy—stable structure.
+
+SUMMARY
+This glossary defines the conceptual backbone of evolutionary intelligence.
+Truth is stability. Structure is what endures. Generalization is survival
+under drift. Negentropy is accumulated structure. Evolution is the
+mechanism by which unstable patterns die and stable patterns persist. All
+intelligence emerges from this cycle.
