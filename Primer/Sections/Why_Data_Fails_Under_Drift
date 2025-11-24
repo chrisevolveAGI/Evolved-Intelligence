@@ -1,0 +1,90 @@
+WHY DATA FAILS UNDER DRIFT
+Data records what has already occurred. It captures the relationships,
+correlations, and structures present during a particular slice of history.
+But when the environment changes—through shifts in meaning, regime,
+context, temperature, scale, or time—the patterns encoded in the data may
+no longer apply. Data fails under drift because it contains both stable
+and unstable relationships, and it provides no mechanism to separate the
+two.
+
+Data is a photograph. Drift reveals what survives the motion.
+
+THE TEMPORAL FRAGILITY OF CORRELATIONS
+Many correlations appear strong in a fixed window but collapse the moment
+the underlying conditions move. These correlations deceive models by
+providing false confidence. Drift exposes their instability immediately.
+What looked like a rule becomes a coincidence.
+
+Most correlations are short lived. Few relationships persist.
+
+REGIME DEPENDENCE
+Many datasets reflect conditions specific to:
+• an economic regime,
+• a semantic usage period,
+• a physical equilibrium,
+• a biological environment,
+• a technological state.
+
+When the regime shifts, the patterns disappear. Models built on these
+patterns fail because they confuse temporary alignments with structure.
+
+Regimes change. Structure does not.
+
+DATA CANNOT REVEAL INVARIANTS
+To know whether a pattern will survive drift, it must be tested under
+conditions outside the data window. Data cannot provide that test. It
+cannot show whether a relationship is stable or fragile. Structure is
+revealed only when representations face variation.
+
+Data contains the past. Invariants live in the future.
+
+INTERPOLATION’S DEAD END
+Interpolation assumes the future lies between the examples the data
+provides. Drift violates this assumption. When the target moves outside
+the data distribution, interpolation becomes hallucination. Models that
+depend on interpolation collapse because the future no longer resembles
+the past.
+
+Interpolation predicts the past, not the drifted world.
+
+WHY MORE DATA DOES NOT HELP
+Adding more data amplifies the number of correlations a model can absorb.
+It does not increase the fraction of relationships that are stable.
+Stronger correlations do not imply deeper structure. Larger datasets can
+even reinforce fragile patterns with greater statistical confidence,
+making failure under drift more catastrophic.
+
+More data increases confidence, not stability.
+
+THE ROLE OF DRIFT AS A FILTER
+Drift is the only force that reveals which patterns are real. When the
+world changes:
+• unstable correlations collapse immediately,
+• stable relationships endure,
+• noisy patterns vanish,
+• structural invariants persist.
+
+Drift removes the illusions hidden inside the data.
+
+ABSTENTION PROTECTS AGAINST DATA FRAGILITY
+When evidence is uncertain—especially during drift—abstention prevents the
+system from encoding unstable correlations. Forced prediction reinforces
+noise and pollutes structure. Abstention preserves the integrity of the
+representation until clarity returns.
+
+Silence is the shield against data’s instability.
+
+EVOLUTION TRANSFORMS DATA INTO STRUCTURE
+Evolutionary systems convert data into truth by exposing patterns to drift
+and eliminating those that fail. Over time, only stable relationships
+remain. This process transforms the raw, unfiltered correlations of the
+dataset into a distilled set of invariants.
+
+Evolution is the mechanism that makes data meaningful.
+
+SUMMARY
+Data fails under drift because it reflects a frozen moment in a changing
+world. It contains correlations but not stability, patterns but not truth.
+More data does not fix this. Only drift testing and evolutionary pressure
+can reveal which relationships endure. Intelligence requires structure,
+and structure is discovered only when unstable patterns die.
