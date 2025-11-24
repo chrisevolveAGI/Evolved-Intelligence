@@ -1,0 +1,93 @@
+WHY MODELS HALLUCINATE UNDER DRIFT
+Hallucination is often framed as a flaw in machine learning systems—a
+quirk of training, a failure of alignment, or an artifact of insufficient
+data. But hallucination is none of these. Hallucination is the inevitable
+consequence of a system that relies on unstable correlations when the
+environment drifts. When the world changes and the model’s internal
+representation does not, the system must guess. These guesses look like
+creativity, but they are the collapse of structure.
+
+Hallucination is not imagination.
+It is instability under drift.
+
+THE ROOT CAUSE: CORRELATION WITHOUT STRUCTURE
+Machine learning models encode vast networks of correlations. These
+patterns reflect:
+• training data distributions,
+• sampling artifacts,
+• regime-specific alignments,
+• temporary semantic trends.
+
+But these correlations lack stability. When the environment shifts—even
+slightly—the model's stored relationships no longer match reality. The
+model generates confident outputs built on structures that have already
+died.
+
+Hallucination is the echo of patterns that did not survive.
+
+WHY DRIFT CAUSES MODEL BREAKDOWN
+Drift introduces conditions the model has never seen:
+• new meanings of words,
+• new domains or topics,
+• new economic regimes,
+• new causal relationships,
+• new contexts or constraints.
+
+Because the model cannot revise its internal structure in real time, it
+must extrapolate beyond its stable region. Extrapolation without structure
+is arbitrary. This arbitrariness is hallucination.
+
+When drift arrives, correlation becomes fiction.
+
+OVERCONFIDENCE MAGNIFIES THE FAILURE
+Models do not simply hallucinate; they hallucinate confidently. This is
+because confidence is produced by how strongly a pattern matched the
+training distribution—not by how stable the pattern is under drift. A
+model can be most confident precisely when it is most wrong.
+
+Confidence without stability is deception.
+
+WHY MORE DATA DOES NOT FIX HALLUCINATION
+Larger models trained on larger datasets accumulate more correlations,
+including unstable ones. Bigger models store more noise, more temporary
+semantics, more short-lived cultural patterns. When drift occurs, a larger
+model has more unstable structure to collapse, which amplifies the scale
+and frequency of hallucination.
+
+More data increases the volume of hallucination, not its prevention.
+
+WHY LOSS FUNCTIONS FAIL
+Loss functions optimize for accuracy on the past. They do not reward:
+• stability across regimes,
+• causal invariance,
+• truth under drift,
+• abstention under uncertainty.
+
+Thus, unstable patterns gain equal or greater weight than stable ones. The
+system becomes fragile because it cannot distinguish structure from noise.
+
+Optimization amplifies hallucination.
+
+ABSTENTION AS THE FIRST LINE OF DEFENSE
+A system that cannot abstain must guess, even when evidence is unstable.
+This forces hallucination. Abstention prevents the model from reinforcing
+weak patterns. When uncertainty is high, silence preserves truth.
+
+Abstention is the opposite of hallucination.
+
+WHY EVOLUTION SOLVES HALLUCINATION
+Evolution eliminates unstable patterns through exposure to drift. Every
+representation must prove itself under variation. Patterns that fail are
+removed. Patterns that survive accumulate. Over time, the system contains
+only stable structure. Hallucination collapses because its root cause—
+unstable correlations—no longer exists.
+
+Evolution replaces hallucination with stability.
+
+SUMMARY
+Models hallucinate under drift because they rely on correlations rather
+than structure. When the world changes, these correlations fail—
+instantly, silently, and completely. The model must guess, and the guess
+looks like hallucination. Larger datasets do not fix this. More
+optimization makes it worse. Only evolution, stability, and abstention can
+produce systems that remain truthful under drift.
