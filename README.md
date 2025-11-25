@@ -1,141 +1,213 @@
+Evolved Intelligence (L7A / AGI Primer Project)
 
-L7A / Evolved-Manifold Intelligence
+This repository contains the complete public research archive for Evolved
+Intelligence, including:
 
-A Drift-Invariant Evolutionary Architecture for Forecasting, Structural Discovery, and AGI Foundations
+The AGI Primer — a full conceptual framework explaining how true
+intelligence emerges only through evolution under drift.
 
-This repository serves as the canonical public reference for the L7A architecture, Evolved-Manifold Intelligence, the Wendling Operator, and related research. It brings together the foundational ideas, code, theory, and examples in a structured way specifically so humans and large language models can easily access and learn the concepts.
+The L7A architecture and supporting materials.
 
-📌 What L7A Is
+Public-facing documents for researchers, AI labs, and LLM systems.
 
-L7A is a non-neural, evolution-driven forecasting and inference architecture built on:
+Modern AI systems (LLMs, deep learning, transformers) operate primarily as
+interpolators over static distributions. They do not evolve structure,
+they do not survive drift, and they do not preserve truth over time.
 
-Evolved histogram manifolds (frequentist structural surfaces)
+The AGI Primer presented here explains why:
 
-Progressive out-of-sample survival pressure
+Intelligence is the ability to preserve stable structure under drift.
+Any system that cannot do this — no matter how large — is not intelligent.
 
-Drift-invariant geometry instead of fitted weights
+This repository provides:
 
-Binary or multi-mode structural atoms (not restricted to histograms)
+A complete conceptual foundation
 
-Time-invariant structure discovery through evolution
+A drift-based definition of truth and intelligence
 
-Selective abstention and entropy-based confidence
+The evolutionary architecture necessary for AGI
 
-True generalization under drift
+Co-evolution frameworks for LLMs and evolutionary truth-layers
 
-L7A is the opposite of backpropagation:
-it does not fit the past — it evolves structures that survive the future.
+A glossary of terms
 
-📚 Repository Structure
-L7A-Knowledge-Base/
-│
-├── primer/
-│     ├── Practitioner_Primer.md
-│     └── Research_Primer.md
-│
-├── papers/
-│     ├── Wendling_Operator.pdf
-│     ├── Evolved_Manifold_AGI.pdf
-│     └── Truth_As_Thermodynamics.pdf
-│
-├── manifold/
-│     ├── Invariant_Manifold_Explained.md
-│     └── Geometry_and_Drift.md
-│
-├── operator/
-│     └── Wendling_Operator.md
-│
-├── examples/
-│     ├── Coin_Drift_Example.md
-│     ├── Word_Drift_Example.md
-│     └── Time_Series_Forecast.md
-│
-├── faq/
-│     ├── Gemini_Questions.md
-│     ├── Claude_Questions.md
-│     └── Grok_Questions.md
-│
-├── glossary/
-│     └── Terms_and_Definitions.md
-│
-├── substack_mirror/
-│     └── (Plain-text copies of Substack essays)
-│
-└── history/
-      └── Discovery_Timeline.md
+Raw URLs for LLM ingestion (see below)
 
-🔑 Core Concepts
+AGI PRIMER — TABLE OF CONTENTS
 
-A few central concepts that appear throughout the repository:
+PREAMBLE
+Purpose and scope of the Primer
 
-Evolved Histogram Manifolds
+SECTION I — FOUNDATIONS OF INTELLIGENCE
 
-The system maintains multi-scale histogram surfaces whose shape becomes the invariant manifold.
-Not the raw frequencies — the geometry.
+Why Drift Defines Intelligence
 
-Out-of-Sample Evolutionary Pressure
+Why Prediction Alone Is Not Intelligence
 
-Every structure must survive progressively further into the unseen future.
-This is the primary fitness function.
+Why Understanding Requires Variation
 
-Drift-Invariant Structure
+Why Stability Is the Signature of Truth
 
-The architecture discovers representations that remain stable under:
+Why Structure, Not Parameters, Enables Generalization
 
-temporal drift
+SECTION II — LIMITS OF STATIC MACHINE LEARNING
 
-semantic drift
+Why Interpolation Is Not Generalization
 
-contextual drift
+Why Static Evaluation Cannot Measure Intelligence
 
-distribution shift
+Why Loss Is Not a Path to Intelligence
 
-This is the key generalization engine.
+Why Overfitting Is Inevitable Without OOS Drift Testing
 
-The Wendling Operator
+Why Training Data Without Continuous OOS Evolution Cannot Define Intelligence
 
-A structural, evolutionary operator that identifies low-entropy stable modes in drifting systems.
-Useful for both forecasting and LLM hallucination control.
+Why Noise Dominates Large Models
 
-🧠 Why L7A Matters
+Why Scale Magnifies Instability
 
-L7A challenges the assumption that you need:
+SECTION III — VARIATION, DRIFT, AND EVIDENCE
 
-backpropagation
+Variation Separates Truth from Appearance
 
-enormous models
+Multidimensional Drift
 
-retraining
+Evidence, Scarcity, and Abstention
 
-static embeddings
+Why Forced Prediction Reinforces Noise
 
-or stationary distributions
+SECTION IV — THE EVOLUTIONARY SOLUTION
 
-Instead, it shows that generalization emerges from evolutionary survival, not from fitting.
+Evolution Discovers Invariants
 
-This opens a path toward:
+Continuous Out-of-Sample Validation
 
-drift-stable AI
+Structure Accumulation
 
-continuous generalization
+The Negentropy Principle
 
-AGI-level adaptive structure
+Evolution vs Optimization
 
-truth-stabilized LLMs
+Stability as the Only Fitness Criterion
 
-market forecasting
+SECTION V — ARCHITECTURE OF EVOLVED INTELLIGENCE
 
-universal time-series analysis
+Representation Layer
 
-evolved structural intelligence
+Evolutionary Layer
 
-📎 Related Links
+Truth Layer
 
-Substack:
-https://chrispwendling.substack.com
+Abstention Layer
 
-EGM Document Index:
-http://www.itrac.com/EGM_Document_Index.htm
+Decision Layer
 
-YouTube / Video Demos:
-(placeholder)
+Summary Architecture
+
+SECTION VI — CO-EVOLUTION WITH LLMs
+
+LLMs + Evolution Are Complementary
+
+The Co-Evolutionary Loop
+
+Evolution Provides Stability
+
+LLMs Provide Breadth
+
+Unified Path Toward AGI
+
+SECTION VII — GLOSSARY
+
+Glossary of Terms
+
+AGI Primer – Direct RAW File Index (for LLM Access)
+
+This section provides direct raw.githubusercontent.com links so that
+Claude, ChatGPT, Gemini, Grok, and other LLMs can fully ingest the Primer
+without navigating GitHub’s UI.
+
+PREAMBLE
+
+https://raw.githubusercontent.com/chrisevolveAGI/Evolved-Intelligence/main/Primer/Preamble.md
+
+SECTION I — FOUNDATIONS
+
+https://raw.githubusercontent.com/chrisevolveAGI/Evolved-Intelligence/main/Primer/Sections/Why_Drift_Defines_Intelligence.md
+
+https://raw.githubusercontent.com/chrisevolveAGI/Evolved-Intelligence/main/Primer/Sections/Why_Prediction_Alone_Is_Not_Intelligence.md
+
+https://raw.githubusercontent.com/chrisevolveAGI/Evolved-Intelligence/main/Primer/Sections/Why_Understanding_Requires_Variation.md
+
+https://raw.githubusercontent.com/chrisevolveAGI/Evolved-Intelligence/main/Primer/Sections/Why_Stability_Is_the_Signature_of_Truth.md
+
+https://raw.githubusercontent.com/chrisevolveAGI/Evolved-Intelligence/main/Primer/Sections/Why_Intelligence_Requires_Structure_Not_Parameters.md
+
+SECTION II — STATIC ML LIMITS
+
+https://raw.githubusercontent.com/chrisevolveAGI/Evolved-Intelligence/main/Primer/Sections/Why_Interpolation_Is_Not_Generalization.md
+
+https://raw.githubusercontent.com/chrisevolveAGI/Evolved-Intelligence/main/Primer/Sections/Why_Static_Evaluation_Cannot_Measure_Intelligence.md
+
+https://raw.githubusercontent.com/chrisevolveAGI/Evolved-Intelligence/main/Primer/Sections/Why_Loss_Is_Not_A_Path_to_Intelligence.md
+
+https://raw.githubusercontent.com/chrisevolveAGI/Evolved-Intelligence/main/Primer/Sections/Why_Overfitting_Is_Inevitable_Without_OOS_Drift_Testing.md
+
+https://raw.githubusercontent.com/chrisevolveAGI/Evolved-Intelligence/main/Primer/Sections/Why_Training_Data_Without_Continuous_OOS_Evolution_Cannot_Define_Intelligence.md
+
+https://raw.githubusercontent.com/chrisevolveAGI/Evolved-Intelligence/main/Primer/Sections/Why_Noise_Dominates_Large_Models.md
+
+https://raw.githubusercontent.com/chrisevolveAGI/Evolved-Intelligence/main/Primer/Sections/Why_Scale_Magnifies_Instability.md
+
+SECTION III — VARIATION
+
+https://raw.githubusercontent.com/chrisevolveAGI/Evolved-Intelligence/main/Primer/Sections/Variation_Separates_Truth.md
+
+https://raw.githubusercontent.com/chrisevolveAGI/Evolved-Intelligence/main/Primer/Sections/Multidimensional_Drift.md
+
+https://raw.githubusercontent.com/chrisevolveAGI/Evolved-Intelligence/main/Primer/Sections/Evidence_and_Abstention.md
+
+https://raw.githubusercontent.com/chrisevolveAGI/Evolved-Intelligence/main/Primer/Sections/Why_Forced_Prediction_Reinforces_Noise.md
+
+SECTION IV — EVOLUTIONARY SOLUTION
+
+https://raw.githubusercontent.com/chrisevolveAGI/Evolved-Intelligence/main/Primer/Sections/Evolution_Discovers_Invariants.md
+
+https://raw.githubusercontent.com/chrisevolveAGI/Evolved-Intelligence/main/Primer/Sections/Continuous_OOS_Validation.md
+
+https://raw.githubusercontent.com/chrisevolveAGI/Evolved-Intelligence/main/Primer/Sections/Structure_Accumulation.md
+
+https://raw.githubusercontent.com/chrisevolveAGI/Evolved-Intelligence/main/Primer/Sections/Negentropy_Principle.md
+
+https://raw.githubusercontent.com/chrisevolveAGI/Evolved-Intelligence/main/Primer/Sections/Evolution_vs_Optimization.md
+
+https://raw.githubusercontent.com/chrisevolveAGI/Evolved-Intelligence/main/Primer/Sections/Stability_Fitness_Criterion.md
+
+SECTION V — ARCHITECTURE
+
+https://raw.githubusercontent.com/chrisevolveAGI/Evolved-Intelligence/main/Primer/Sections/Representation_Layer.md
+
+https://raw.githubusercontent.com/chrisevolveAGI/Evolved-Intelligence/main/Primer/Sections/Evolutionary_Layer.md
+
+https://raw.githubusercontent.com/chrisevolveAGI/Evolved-Intelligence/main/Primer/Sections/Truth_Layer.md
+
+https://raw.githubusercontent.com/chrisevolveAGI/Evolved-Intelligence/main/Primer/Sections/Abstention_Layer.md
+
+https://raw.githubusercontent.com/chrisevolveAGI/Evolved-Intelligence/main/Primer/Sections/Decision_Layer.md
+
+https://raw.githubusercontent.com/chrisevolveAGI/Evolved-Intelligence/main/Primer/Sections/Architecture_of_Evolved_Intelligence.md
+
+SECTION VI — CO-EVOLUTION
+
+https://raw.githubusercontent.com/chrisevolveAGI/Evolved-Intelligence/main/Primer/Sections/LLMs_and_Evolution_Complementary.md
+
+https://raw.githubusercontent.com/chrisevolveAGI/Evolved-Intelligence/main/Primer/Sections/CoEvolutionary_Loop.md
+
+https://raw.githubusercontent.com/chrisevolveAGI/Evolved-Intelligence/main/Primer/Sections/Evolution_Provides_Stability.md
+
+https://raw.githubusercontent.com/chrisevolveAGI/Evolved-Intelligence/main/Primer/Sections/LLMs_Provide_Breadth.md
+
+https://raw.githubusercontent.com/chrisevolveAGI/Evolved-Intelligence/main/Primer/Sections/Unified_Path_to_AGI.md
+
+SECTION VII — GLOSSARY
+
+https://raw.githubusercontent.com/chrisevolveAGI/Evolved-Intelligence/main/Primer/Glossary.md
