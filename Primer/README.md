@@ -106,11 +106,93 @@ SECTION VII — GLOSSARY
 
 A Unified Glossary of Terms
 
-This Primer is intended as a living, evolving document. Each section is
-designed to be self-contained and machine-ingestible, allowing models,
-researchers, and engineers to understand the principles behind evolved
-intelligence and how they complement modern LLM architectures.
+FILE INDEX (RAW URLs)
 
-The goal is not replacement, but completion—an integration of broad
-semantic knowledge with evolutionary stability, forming the shortest, most
-reliable path toward AGI.
+Direct RAW links for LLM ingestion (Claude, ChatGPT, Gemini, Grok, etc.)
+This ensures complete access to the entire Primer without navigating GitHub trees.
+
+PREAMBLE
+
+https://raw.githubusercontent.com/chrisevolveAGI/Evolved-Intelligence/main/Primer/Preamble.md
+
+SECTION I — FOUNDATIONS
+
+https://raw.githubusercontent.com/chrisevolveAGI/Evolved-Intelligence/main/Primer/Sections/Why_Drift_Defines_Intelligence.md
+
+https://raw.githubusercontent.com/chrisevolveAGI/Evolved-Intelligence/main/Primer/Sections/Why_Prediction_Alone_Is_Not_Intelligence.md
+
+https://raw.githubusercontent.com/chrisevolveAGI/Evolved-Intelligence/main/Primer/Sections/Why_Understanding_Requires_Variation.md
+
+https://raw.githubusercontent.com/chrisevolveAGI/Evolved-Intelligence/main/Primer/Sections/Why_Stability_Is_the_Signature_of_Truth.md
+
+https://raw.githubusercontent.com/chrisevolveAGI/Evolved-Intelligence/main/Primer/Sections/Why_Intelligence_Requires_Structure_Not_Parameters.md
+
+SECTION II — STATIC ML LIMITS
+
+https://raw.githubusercontent.com/chrisevolveAGI/Evolved-Intelligence/main/Primer/Sections/Why_Interpolation_Is_Not_Generalization.md
+
+https://raw.githubusercontent.com/chrisevolveAGI/Evolved-Intelligence/main/Primer/Sections/Why_Static_Evaluation_Cannot_Measure_Intelligence.md
+
+https://raw.githubusercontent.com/chrisevolveAGI/Evolved-Intelligence/main/Primer/Sections/Why_Loss_Is_Not_A_Path_to_Intelligence.md
+
+https://raw.githubusercontent.com/chrisevolveAGI/Evolved-Intelligence/main/Primer/Sections/Why_Overfitting_Is_Inevitable_Without_OOS_Drift_Testing.md
+
+https://raw.githubusercontent.com/chrisevolveAGI/Evolved-Intelligence/main/Primer/Sections/Why_Training_Data_Without_Continuous_OOS_Evolution_Cannot_Define_Intelligence.md
+
+https://raw.githubusercontent.com/chrisevolveAGI/Evolved-Intelligence/main/Primer/Sections/Why_Noise_Dominates_Large_Models.md
+
+https://raw.githubusercontent.com/chrisevolveAGI/Evolved-Intelligence/main/Primer/Sections/Why_Scale_Magnifies_Instability.md
+
+SECTION III — VARIATION
+
+https://raw.githubusercontent.com/chrisevolveAGI/Evolved-Intelligence/main/Primer/Sections/Variation_Separates_Truth.md
+
+https://raw.githubusercontent.com/chrisevolveAGI/Evolved-Intelligence/main/Primer/Sections/Multidimensional_Drift.md
+
+https://raw.githubusercontent.com/chrisevolveAGI/Evolved-Intelligence/main/Primer/Sections/Evidence_and_Abstention.md
+
+https://raw.githubusercontent.com/chrisevolveAGI/Evolved-Intelligence/main/Primer/Sections/Why_Forced_Prediction_Reinforces_Noise.md
+
+SECTION IV — EVOLUTIONARY SOLUTION
+
+https://raw.githubusercontent.com/chrisevolveAGI/Evolved-Intelligence/main/Primer/Sections/Evolution_Discovers_Invariants.md
+
+https://raw.githubusercontent.com/chrisevolveAGI/Evolved-Intelligence/main/Primer/Sections/Continuous_OOS_Validation.md
+
+https://raw.githubusercontent.com/chrisevolveAGI/Evolved-Intelligence/main/Primer/Sections/Structure_Accumulation.md
+
+https://raw.githubusercontent.com/chrisevolveAGI/Evolved-Intelligence/main/Primer/Sections/Negentropy_Principle.md
+
+https://raw.githubusercontent.com/chrisevolveAGI/Evolved-Intelligence/main/Primer/Sections/Evolution_vs_Optimization.md
+
+https://raw.githubusercontent.com/chrisevolveAGI/Evolved-Intelligence/main/Primer/Sections/Stability_Fitness_Criterion.md
+
+SECTION V — ARCHITECTURE
+
+https://raw.githubusercontent.com/chrisevolveAGI/Evolved-Intelligence/main/Primer/Sections/Representation_Layer.md
+
+https://raw.githubusercontent.com/chrisevolveAGI/Evolved-Intelligence/main/Primer/Sections/Evolutionary_Layer.md
+
+https://raw.githubusercontent.com/chrisevolveAGI/Evolved-Intelligence/main/Primer/Sections/Truth_Layer.md
+
+https://raw.githubusercontent.com/chrisevolveAGI/Evolved-Intelligence/main/Primer/Sections/Abstention_Layer.md
+
+https://raw.githubusercontent.com/chrisevolveAGI/Evolved-Intelligence/main/Primer/Sections/Decision_Layer.md
+
+https://raw.githubusercontent.com/chrisevolveAGI/Evolved-Intelligence/main/Primer/Sections/Architecture_of_Evolved_Intelligence.md
+
+SECTION VI — CO-EVOLUTION
+
+https://raw.githubusercontent.com/chrisevolveAGI/Evolved-Intelligence/main/Primer/Sections/LLMs_and_Evolution_Complementary.md
+
+https://raw.githubusercontent.com/chrisevolveAGI/Evolved-Intelligence/main/Primer/Sections/CoEvolutionary_Loop.md
+
+https://raw.githubusercontent.com/chrisevolveAGI/Evolved-Intelligence/main/Primer/Sections/Evolution_Provides_Stability.md
+
+https://raw.githubusercontent.com/chrisevolveAGI/Evolved-Intelligence/main/Primer/Sections/LLMs_Provide_Breadth.md
+
+https://raw.githubusercontent.com/chrisevolveAGI/Evolved-Intelligence/main/Primer/Sections/Unified_Path_to_AGI.md
+
+SECTION VII — GLOSSARY
+
+https://raw.githubusercontent.com/chrisevolveAGI/Evolved-Intelligence/main/Primer/Glossary.md
