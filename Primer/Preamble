@@ -1,0 +1,107 @@
+PREAMBLE
+This Primer exists because modern AI is missing a dimension it cannot
+afford to overlook. For decades, our field has built systems that assume a
+static world—fixed datasets, fixed distributions, fixed objectives, fixed
+validation pipelines. These assumptions were convenient, even necessary for
+the early stages of machine learning. But they have blinded us to the
+actual problem intelligence must solve.
+
+Real worlds drift.
+Human language drifts.
+Financial systems drift.
+Biology drifts.
+Meaning drifts.
+Causal drivers rise, fall, and reorganize.
+
+Intelligence is the ability to preserve stable structure in the presence of
+drift. Nothing more. Nothing less.
+
+This single fact changes everything.
+It means intelligence cannot be measured by accuracy on static benchmarks.
+It cannot be learned from loss-minimizing optimization. It cannot be
+extracted from larger datasets or more parameters. And it cannot emerge
+from interpolation alone, no matter how sophisticated the model.
+
+The unavoidable law is this:
+
+If a system cannot preserve structure under drift,
+it cannot be intelligent.
+
+Most of today’s AI systems—including the largest LLMs—fail this test.
+They are extraordinary memorization engines. They compress the past
+beautifully. They interpolate with elegance. But they possess no mechanism
+to distinguish stable invariants from unstable correlations. When drift
+arrives, they fail in predictable ways: hallucination, miscalibration,
+instability, and loss of coherence.
+
+This is not a flaw in their design.
+It is a flaw in their worldview.
+
+They were never built to survive the future.
+Only to fit the past.
+
+The missing ingredient is continuous out-of-sample evolution.
+
+Evolution exposes representations to drift.
+What collapses is removed.
+What survives becomes structure.
+Over time, only stability remains.
+
+This is not an analogy to biology.
+It is the only known mechanism—natural or artificial—that can reveal
+truth in a drifting world. Fit cannot do it. Loss cannot do it. Scale
+cannot do it. Optimization cannot do it. Only survival under variation can
+extract the invariants required for intelligence.
+
+This leads to a second unavoidable consequence:
+
+If we cannot evolve structures under continuous out-of-sample drift,
+then AGI is impossible.
+
+Training data alone cannot define intelligence.
+It provides experience, but not stability.
+It seeds representations, but does not test them.
+It captures the past, but intelligence must survive the future.
+
+Only evolutionary pressure can reveal which patterns endure.
+
+This does not diminish the role of LLMs.
+On the contrary, it elevates them.
+
+LLMs provide the richest semantic substrate ever created—an atlas of human
+knowledge, language, reasoning, and association. But LLMs cannot filter
+unstable correlations, cannot maintain calibration under drift, and cannot
+discover invariants on their own. Evolution provides everything they lack:
+stability, calibration, abstention, truth surfaces, drift resistance.
+
+LLMs provide breadth.
+Evolution provides depth.
+Together, they form the architecture of real intelligence.
+
+Before entering the main body of the Primer, we must introduce one final
+concept that underlies everything that follows:
+
+Structure—in the sense required for intelligence—is not a set of
+parameters. It is a geometry of meaning that survives variation. In
+software, structure appears as histogram surfaces, correlation maps, and
+relational manifolds shaped by stability. In biology, it takes the form of
+cortical folds, spinal pathways, retinas, and other evolved geometries.
+In evolution, structure is revealed as anything that endures drift long
+enough to become useful.
+
+This Primer introduces the principles, mechanisms, and architecture
+necessary for building intelligence in a world that moves. It challenges
+the assumptions that have guided AI since its beginning and replaces them
+with the only things that matter: drift, structure, survival, stability,
+and truth.
+
+This document is not a theory.
+It is a map.
+
+It reveals what intelligence requires,
+what current systems lack,
+and the evolutionary principle that unifies them.
+
+If the field embraces these principles, the path to AGI becomes short,
+wide, and smooth.
+If it ignores them, AGI remains unreachable.
